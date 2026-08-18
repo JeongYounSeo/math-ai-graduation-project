@@ -246,6 +246,10 @@ uvicorn app.main:app --reload
 - `GET /api/problems/{problem_id}` - 문제 상세 조회
 - `PATCH /api/problems/{problem_id}` - 문제 정보 수정
 - `DELETE /api/problems/{problem_id}` - 상태를 `excluded`로 변경
+- `POST /problems/{problem_id}/ocr` (`/api/problems/{problem_id}/ocr`) - 문제 이미지에 OCR 실행, 본문/보기/region 텍스트 갱신
+
+### Problem Region crop API
+- `POST /api/problem-regions/{region_id}/crop` - region 좌표로 이미지 재크롭
 
 ## 예시 API 요청
 
@@ -363,15 +367,44 @@ Problem 1
 
 `ProblemRepository.create_from_pdf()`로 PDF에서 Problem이 생성될 때마다 `full_problem` region이 자동으로 함께 생성된다 (이미 있으면 중복 생성하지 않는다). `choice_group`/`choice_option` 개별 영역의 bbox 자동 검출은 아직 구현하지 않았다.
 
-### 적용 범위와 보류된 부분
+## OCR / 이미지 crop
 
-이 기능은 원래 스펙에서 OCR 결과 적용(`problem_ocr_service.apply_ocr_result`)과 Review UI 개선까지 포함했지만, 이 저장소에는 다음이 아직 존재하지 않아 해당 부분은 구현하지 않았다:
+`app/services/ocr_providers/`에 벤더 중립적인 OCR provider 인터페이스가 있다.
 
-- `app/services/problem_ocr_service.py` 자체가 없음 (`ocr_service.py`는 mock 스텁만 존재)
-- `Problem` 모델에 `answer_type`/`choices`/`correct_answer`/`ai_ocr_text`/`ocr_status`/`ocr_provider` 필드가 없음
-- Review UI(`app/templates/`, `review_router.py`), Worksheet Builder, Taxonomy 관리가 없음
+```python
+class OCRResult:
+    body_text: str | None
+    choices: list[str]
+    latex_text: str | None
+    confidence: float | None
+    provider_name: str
 
-위 하위 시스템이 추가되면, `ProblemChoiceRepository.replace_choices_for_problem()`을 OCR 결과 적용 지점에 연결하고 Review UI에 영역/보기 섹션을 붙이는 식으로 자연스럽게 확장할 수 있도록 레포지토리/스키마/라우터를 준비해 두었다.
+class OCRProvider(ABC):
+    async def extract(self, image_path: str) -> OCRResult: ...
+```
+
+- `app/services/ocr_providers/mock.py`의 `MockOCRProvider`: 실제 네트워크 호출 없이 고정/설정 가능한 더미 결과를 반환한다. 테스트와 로컬 개발에서 사용한다.
+- `app/services/ocr_providers/claude_vision.py`의 `ClaudeVisionOCRProvider`: Claude vision API로 이미지를 분석해 문제 본문/보기를 JSON으로 추출한다. `ANTHROPIC_API_KEY` 환경변수가 없으면 생성 시점에 바로 `ValueError`를 던진다 (조용히 실패하거나 가짜 데이터를 반환하지 않는다). 다른 벤더(Gemini, Mathpix 등)로 교체하려면 `OCRProvider`를 구현하는 새 provider를 추가하고 `app/services/problem_ocr_service.get_ocr_provider()`가 그 provider를 반환하도록 바꾸면 된다.
+- `app/services/problem_ocr_service.py`의 `ProblemOCRService.run_ocr_for_problem(problem)`: `problem.problem_image_path`(없으면 `page_image_path`)를 provider에 넘겨 OCR을 실행한다. provider는 생성자 주입이라 테스트에서 쉽게 교체할 수 있다.
+- `POST /problems/{problem_id}/ocr` (`/api/problems/{problem_id}/ocr`로도 접근 가능): OCR을 실행하고 `Problem.raw_ocr_text`/`latex_text`, `ProblemChoice`(보기가 있을 때만, `ProblemChoiceRepository.replace_choices_for_problem()` 재사용), `full_problem` region의 `extracted_text`/`latex_text`/`confidence`/`provider`를 함께 갱신한다. 이미지가 없으면 400, provider 호출/파싱이 실패하면 500을 반환한다(마스킹하지 않는다). **정답은 여전히 추측하지 않으므로 `ProblemChoice.is_correct`는 항상 `null`로 남는다.**
+
+### Region crop 저장
+
+`app/services/problem_region_crop_service.py`의 `ProblemRegionCropService.crop_and_save(region, source_image_path)`가 Pillow로 좌표(x1,y1,x2,y2)만큼 잘라 `uploads/regions/{problem_id}/{region_id}.png`에 저장한다. 좌표가 하나라도 없으면 `ValueError`.
+
+- source 이미지 선택 규칙: `page_width`/`page_height`가 함께 저장된 region(예: `full_problem`)은 페이지 좌표계로 보고 `problem.page_image_path`를, 그렇지 않으면 `problem.problem_image_path`를 사용한다 (`resolve_source_image_path()`).
+- `POST /api/problems/{problem_id}/regions`로 좌표가 채워진 채 생성되거나 `PATCH /api/problem-regions/{region_id}`로 좌표가 채워지면, 클라이언트가 `cropped_image_path`를 직접 주지 않은 경우 저장 직후 자동으로 crop을 시도한다. 좌표가 없거나 source 이미지를 아직 찾을 수 없으면 조용히 건너뛴다(에러 아님) — 이 자동 트리거는 best-effort이며 CRUD 응답 자체를 실패시키지 않는다.
+- `POST /api/problem-regions/{region_id}/crop`: 좌표가 바뀌었거나 처음부터 크롭이 안 됐을 때 수동으로 재실행한다. 좌표가 없으면 400.
+
+### viewer.html
+
+`app/static/viewer.html` (서버 실행 후 `http://localhost:8000/viewer`)에서 문제 ID를 입력해 본문/LaTeX, region 표(좌표·추출 텍스트·crop 썸네일·"crop 재생성" 버튼), 선택지 표를 확인할 수 있다. 상단 "OCR 실행" 버튼은 `POST /problems/{id}/ocr`을 호출하고 실행 중에는 비활성화된다. "선택지 직접 입력" 폼은 OCR 결과를 사람이 다시 수정할 수 있도록 그대로 유지했다.
+
+### 지금 단계에서 하지 않는 것
+
+- 정답(`is_correct`) 자동 판별: OCR 결과에 정답이 명시적으로 없으면 항상 `null`로 남긴다.
+- Review UI(`app/templates/`), Worksheet Builder, Taxonomy 관리는 여전히 없다. `viewer.html`은 어디까지나 디버그용 뷰어다.
+- `choice_group`/`choice_option` 개별 region의 bbox 자동 검출.
 
 ### 마이그레이션 주의
 
@@ -381,17 +414,17 @@ Problem 1
 
 ## 현재 한계
 
-- OCR 없음
+- OCR은 provider 인터페이스와 mock/Claude vision provider까지만 있고, 실제 벤더 키 없이는 (`ANTHROPIC_API_KEY` 미설정 시) 실행되지 않는다
 - 문제 번호 자동 인식 불완전
-- crop은 heuristic 기반
+- crop은 heuristic 기반 (region 후보 crop) + 좌표 기반 수동/자동 crop (region 이미지 crop) 두 가지가 공존
 - 자동 유형 분류 없음
-- LaTeX 인식 없음
+- LaTeX 인식은 OCR provider 응답에 의존하며 별도 검증 로직은 없음
+- Review UI, Worksheet Builder, Taxonomy 관리 없음 (`viewer.html`은 디버그용)
 
 ## 다음 단계
 
 - crop 영역 수동 수정 UI
-- OCR 추가
-- LaTeX 인식 추가
+- Review UI / Worksheet Builder
 - 소유형 분류 관리
 - 학습지 생성 PDF 출력
 - LLM 기반 단원/소유형 추천

@@ -29,3 +29,9 @@ def get_problem_storage_dir(source_pdf_id: str) -> Path:
     problem_dir = get_upload_path("problems", source_pdf_id)
     problem_dir.mkdir(parents=True, exist_ok=True)
     return problem_dir
+
+
+def get_region_storage_dir(problem_id) -> Path:
+    region_dir = get_upload_path("regions", str(problem_id))
+    region_dir.mkdir(parents=True, exist_ok=True)
+    return region_dir

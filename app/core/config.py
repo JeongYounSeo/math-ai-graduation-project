@@ -12,6 +12,10 @@ class Settings:
         return os.getenv("OPENAI_API_KEY")
 
     @property
+    def ANTHROPIC_API_KEY(self) -> Optional[str]:
+        return os.getenv("ANTHROPIC_API_KEY")
+
+    @property
     def DEBUG(self) -> bool:
         return os.getenv("DEBUG", "False").lower() == "true"
 

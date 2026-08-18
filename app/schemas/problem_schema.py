@@ -73,3 +73,11 @@ class Problem(ProblemBase):
 
     class Config:
         from_attributes = True
+
+
+class OCRRunResponse(BaseModel):
+    problem_id: int
+    body_text: Optional[str] = None
+    choices: List[str] = []
+    confidence: Optional[float] = None
+    provider: Optional[str] = None
