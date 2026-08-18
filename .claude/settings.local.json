@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\".venv/Scripts/python.exe\" -m pytest tests/ -q)",
+      "Bash(DEBUG_CROP=true .venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(rm -rf \"C:/SW Final project/math_problem_engine/uploads/pages/DEBUG_TEST2\")",
+      "Bash(\".venv/Scripts/python.exe\" -m pytest tests/test_problem_crop_trim.py -q)",
+      "Bash(rm -rf uploads/pages/DEBUG_TEST4 uploads/debug/DEBUG_TEST4)",
+      "Bash(rm -rf \"C:/SW Final project/math_problem_engine/uploads/pages/DEBUG_TEST4\" \"C:/SW Final project/math_problem_engine/uploads/debug/DEBUG_TEST4\")",
+      "Bash(rm -rf uploads/pages/DEBUG_TEST5 uploads/debug/DEBUG_TEST5)",
+      "Bash(rm -f scratch_out.txt)",
+      "Bash(rm -f scratch_out2.txt)",
+      "Bash(\".venv/Scripts/python.exe\" -m pytest tests/test_problem_text_filter.py -q)",
+      "Bash(\".venv/Scripts/python.exe\" -m pytest tests/test_pdf_import_flow.py -q)",
+      "Bash(rm -rf /tmp/text_filter_smoke)",
+      "Bash(mkdir -p /tmp/text_filter_smoke)",
+      "Bash(DEBUG_CROP=true UPLOADS_ROOT=/tmp/text_filter_smoke/uploads DATABASE_URL=sqlite:////tmp/text_filter_smoke/test.db .venv/Scripts/python.exe -c ' *)",
+      "Bash(DEBUG_CROP=true UPLOADS_ROOT=__TRACKED_VAR__/uploads DATABASE_URL=sqlite:///__TRACKED_VAR__/test.db .venv/Scripts/python.exe -c ' *)"
+    ]
+  }
+}
