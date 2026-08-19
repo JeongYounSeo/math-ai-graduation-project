@@ -19,6 +19,36 @@ _MIME_TYPES = {
 _ALLOWED_REGION_TYPES = {"figure", "graph", "table"}
 
 
+def _parse_detected_region(item: dict) -> DetectedRegion:
+    """단일 탐지 결과 item을 DetectedRegion으로 파싱합니다.
+
+    좌표가 누락되거나 올바르지 않으면 ValueError를 던집니다.
+    """
+    region_type = item.get("region_type")
+    if region_type not in _ALLOWED_REGION_TYPES:
+        raise ValueError(f"허용되지 않은 region_type입니다: {region_type!r}")
+
+    try:
+        x1 = float(item["x1"])
+        y1 = float(item["y1"])
+        x2 = float(item["x2"])
+        y2 = float(item["y2"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(
+            f"탐지 응답의 region 좌표가 올바르지 않습니다: {item!r}"
+        ) from exc
+
+    return DetectedRegion(
+        region_type=region_type,
+        x1=x1,
+        y1=y1,
+        x2=x2,
+        y2=y2,
+        confidence=item.get("confidence"),
+        reason=item.get("reason"),
+    )
+
+
 class ClaudeVisionRegionDetector(RegionDetector):
     """Claude vision API로 문제 이미지 안의 그림/그래프/표 영역을 찾는 detector.
 
@@ -96,20 +126,7 @@ class ClaudeVisionRegionDetector(RegionDetector):
 
         detected = []
         for item in regions:
-            region_type = item.get("region_type")
-            if region_type not in _ALLOWED_REGION_TYPES:
-                raise ValueError(f"허용되지 않은 region_type입니다: {region_type!r}")
-            detected.append(
-                DetectedRegion(
-                    region_type=region_type,
-                    x1=float(item["x1"]),
-                    y1=float(item["y1"]),
-                    x2=float(item["x2"]),
-                    y2=float(item["y2"]),
-                    confidence=item.get("confidence"),
-                    reason=item.get("reason"),
-                )
-            )
+            detected.append(_parse_detected_region(item))
         return detected
 
 
