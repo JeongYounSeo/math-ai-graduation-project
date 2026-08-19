@@ -8,6 +8,8 @@ from app.schemas.problem_region_schema import ProblemRegion, ProblemRegionCreate
 from app.repositories.problem_region_repository import ProblemRegionRepository
 from app.repositories.problem_repository import ProblemRepository
 from app.services.problem_region_crop_service import ProblemRegionCropService, resolve_source_image_path
+from app.services.problem_region_detection_service import ProblemRegionDetectionService, get_region_detector
+from app.services.region_detectors.base import RegionDetector
 
 router = APIRouter(tags=["Problem Regions"])
 
@@ -89,6 +91,26 @@ async def crop_problem_region(region_id: int, db: Session = Depends(get_db)):
 
     updated = await repo.update(region_id, ProblemRegionUpdate(cropped_image_path=cropped_path))
     return updated
+
+
+@router.post("/api/problems/{problem_id}/regions/detect", response_model=List[ProblemRegion])
+async def detect_problem_regions(
+    problem_id: int,
+    db: Session = Depends(get_db),
+    detector: RegionDetector = Depends(get_region_detector),
+):
+    problem_repo = ProblemRepository(db)
+    problem = await problem_repo.get_by_id(problem_id)
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+    if not (problem.problem_image_path or problem.page_image_path):
+        raise HTTPException(status_code=400, detail="탐지를 실행할 이미지가 없습니다")
+
+    service = ProblemRegionDetectionService(db, detector)
+    try:
+        return await service.detect_and_save_regions(problem_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.delete("/api/problem-regions/{region_id}")
