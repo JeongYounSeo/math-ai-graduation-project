@@ -19,6 +19,8 @@ class DetectedRegion:
 class RegionDetector(ABC):
     """문제 이미지에서 그림/그래프/표 등의 영역을 찾는 provider 인터페이스."""
 
+    provider_name: str = "unknown"
+
     @abstractmethod
     async def detect(self, image_path: str) -> List[DetectedRegion]:
         ...

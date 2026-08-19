@@ -24,6 +24,9 @@ def _parse_detected_region(item: dict) -> DetectedRegion:
 
     좌표가 누락되거나 올바르지 않으면 ValueError를 던집니다.
     """
+    if not isinstance(item, dict):
+        raise ValueError(f"탐지 응답의 region 항목이 올바르지 않습니다: {item!r}")
+
     region_type = item.get("region_type")
     if region_type not in _ALLOWED_REGION_TYPES:
         raise ValueError(f"허용되지 않은 region_type입니다: {region_type!r}")

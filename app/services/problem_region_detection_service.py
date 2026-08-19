@@ -29,7 +29,10 @@ class ProblemRegionDetectionService:
             raise ValueError("탐지를 실행할 이미지가 없습니다")
 
         full_problem_regions = await self.region_repo.list_by_problem_and_type(problem_id, "full_problem")
-        parent_region_id = full_problem_regions[0].id if full_problem_regions else None
+        full_problem_region = full_problem_regions[0] if full_problem_regions else None
+        if full_problem_region is None:
+            full_problem_region = self.region_repo.create_full_problem_region_from_problem(problem)
+        parent_region_id = full_problem_region.id if full_problem_region else None
 
         detected = await self.detector.detect(image_path)
         provider_name = getattr(self.detector, "provider_name", type(self.detector).__name__)

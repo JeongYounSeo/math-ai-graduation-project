@@ -60,6 +60,7 @@ def test_detect_endpoint_creates_and_crops_regions(tmp_path, monkeypatch):
     assert body[0]["region_type"] == "figure"
     assert body[0]["cropped_image_path"]
     assert Path(body[0]["cropped_image_path"]).exists()
+    assert body[0]["parent_region_id"] is not None
 
     regions = client.get(f"/api/problems/{problem_id}/regions").json()
     figure_regions = [r for r in regions if r["region_type"] == "figure"]

@@ -127,6 +127,11 @@ class TestParseDetectedRegion:
         with pytest.raises(ValueError, match="region 좌표가 올바르지 않습니다"):
             _parse_detected_region(item)
 
+    def test_non_dict_item_raises_value_error(self):
+        """region 항목이 dict가 아니면 ValueError를 던집니다 (AttributeError/TypeError 아님)."""
+        with pytest.raises(ValueError, match="region 항목이 올바르지 않습니다"):
+            _parse_detected_region("figure")
+
     def test_invalid_region_type_raises_value_error(self):
         """허용되지 않은 region_type은 ValueError를 던집니다."""
         item = {

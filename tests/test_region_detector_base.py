@@ -14,3 +14,7 @@ def test_detected_region_holds_fields():
 def test_region_detector_cannot_be_instantiated_directly():
     with pytest.raises(TypeError):
         RegionDetector()
+
+
+def test_region_detector_provider_name_defaults_to_unknown():
+    assert RegionDetector.provider_name == "unknown"

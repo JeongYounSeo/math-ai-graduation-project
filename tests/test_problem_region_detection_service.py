@@ -66,6 +66,43 @@ async def test_detect_and_save_regions_creates_child_regions_and_crops(tmp_path,
 
 
 @pytest.mark.asyncio
+async def test_detect_and_save_regions_heals_missing_full_problem_region(tmp_path, monkeypatch):
+    db = _fresh_db_session(tmp_path, monkeypatch)
+
+    from app.models.problem import Problem
+    from app.repositories.problem_region_repository import ProblemRegionRepository
+    from app.services.region_detectors.base import DetectedRegion
+    from app.services.region_detectors.mock import MockRegionDetector
+    from app.services.problem_region_detection_service import ProblemRegionDetectionService
+
+    image_path = _make_image(tmp_path / "problem.png")
+    problem = Problem(title="", source_type="manual", problem_image_path=str(image_path))
+    db.add(problem)
+    db.commit()
+    db.refresh(problem)
+
+    # 의도적으로 full_problem region을 미리 생성하지 않는다 (수동 생성 Problem 시나리오).
+    fixed_regions = [
+        DetectedRegion(region_type="figure", x1=10, y1=10, x2=60, y2=60, confidence=0.8, reason="그림으로 보임"),
+    ]
+    detector = MockRegionDetector(regions=fixed_regions)
+    service = ProblemRegionDetectionService(db, detector)
+
+    created = await service.detect_and_save_regions(problem.id)
+
+    assert len(created) == 1
+    for region in created:
+        assert region.parent_region_id is not None
+
+    region_repo = ProblemRegionRepository(db)
+    full_problem_regions = await region_repo.list_by_problem_and_type(problem.id, "full_problem")
+    assert len(full_problem_regions) == 1
+    assert created[0].parent_region_id == full_problem_regions[0].id
+
+    db.close()
+
+
+@pytest.mark.asyncio
 async def test_detect_and_save_regions_raises_for_missing_problem(tmp_path, monkeypatch):
     db = _fresh_db_session(tmp_path, monkeypatch)
 
