@@ -41,6 +41,9 @@ def test_pdf_upload_creates_source_pdf_and_problem_candidates(tmp_path, monkeypa
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("UPLOADS_ROOT", str(tmp_path / "uploads"))
 
+    import app.core.storage as storage_module
+    monkeypatch.setattr(storage_module, "DEFAULT_UPLOAD_ROOT", tmp_path / "uploads")
+
     import app.core.database as database_module
     importlib.reload(database_module)
     from app.core.database import SessionLocal
@@ -104,6 +107,9 @@ def test_problem_number_detection_improves_crop_count(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("UPLOADS_ROOT", str(tmp_path / "uploads"))
 
+    import app.core.storage as storage_module
+    monkeypatch.setattr(storage_module, "DEFAULT_UPLOAD_ROOT", tmp_path / "uploads")
+
     import app.core.database as database_module
     importlib.reload(database_module)
     from app.core.database import SessionLocal
@@ -148,6 +154,9 @@ def test_problem_number_in_response(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("UPLOADS_ROOT", str(tmp_path / "uploads"))
+
+    import app.core.storage as storage_module
+    monkeypatch.setattr(storage_module, "DEFAULT_UPLOAD_ROOT", tmp_path / "uploads")
 
     import app.core.database as database_module
     importlib.reload(database_module)

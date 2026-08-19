@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from PIL import Image
 
+from app.models.problem import Problem
 from app.services.region_detectors.base import DetectedRegion, RegionDetector
 
 
@@ -18,7 +19,10 @@ class MockRegionDetector(RegionDetector):
     def __init__(self, regions: Optional[List[DetectedRegion]] = None):
         self._regions = list(regions) if regions is not None else None
 
-    async def detect(self, image_path: str) -> List[DetectedRegion]:
+    async def detect(self, problem: Problem) -> List[DetectedRegion]:
+        image_path = problem.problem_image_path or problem.page_image_path
+        if not image_path:
+            raise ValueError("탐지를 실행할 이미지가 없습니다")
         path = Path(image_path)
         if not path.exists():
             raise FileNotFoundError(f"탐지 대상 이미지가 존재하지 않습니다: {image_path}")
