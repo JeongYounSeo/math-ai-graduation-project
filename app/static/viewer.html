@@ -31,6 +31,7 @@
   <input type="number" id="problemId" min="1" value="1">
   <button id="loadBtn">불러오기</button>
   <button id="ocrBtn" disabled>OCR 실행</button>
+  <button id="detectBtn" disabled>이미지/표 탐지</button>
   <span id="status"></span>
 </div>
 
@@ -70,6 +71,7 @@ const statusEl = document.getElementById('status');
 const problemIdInput = document.getElementById('problemId');
 const loadBtn = document.getElementById('loadBtn');
 const ocrBtn = document.getElementById('ocrBtn');
+const detectBtn = document.getElementById('detectBtn');
 const pagePreview = document.getElementById('pagePreview');
 const bodyTextEl = document.getElementById('bodyText');
 const latexTextEl = document.getElementById('latexText');
@@ -110,6 +112,7 @@ async function loadProblem() {
     latexTextEl.textContent = problem.latex_text ? `LaTeX: ${problem.latex_text}` : '';
 
     ocrBtn.disabled = !problem.problem_image_path;
+    detectBtn.disabled = !problem.problem_image_path;
 
     await Promise.all([loadRegions(problemId), loadChoices(problemId)]);
     setStatus('불러오기 완료');
@@ -226,6 +229,30 @@ async function runOcr() {
   }
 }
 
+async function runDetect() {
+  const problemId = currentProblemId();
+  if (!problemId) return;
+  detectBtn.disabled = true;
+  const originalText = detectBtn.textContent;
+  detectBtn.textContent = '탐지 중...';
+  setStatus('이미지/표 탐지 중...');
+  try {
+    const res = await fetch(`/api/problems/${problemId}/regions/detect`, { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `탐지에 실패했습니다 (HTTP ${res.status})`);
+    }
+    const regions = await res.json();
+    setStatus(`탐지 완료 (${regions.length}개 region 생성)`);
+    await loadRegions(problemId);
+  } catch (err) {
+    setStatus(err.message, true);
+  } finally {
+    detectBtn.textContent = originalText;
+    detectBtn.disabled = false;
+  }
+}
+
 async function saveChoices() {
   const problemId = currentProblemId();
   if (!problemId) return;
@@ -247,6 +274,7 @@ async function saveChoices() {
 
 loadBtn.addEventListener('click', loadProblem);
 ocrBtn.addEventListener('click', runOcr);
+detectBtn.addEventListener('click', runDetect);
 saveChoicesBtn.addEventListener('click', saveChoices);
 </script>
 </body>
