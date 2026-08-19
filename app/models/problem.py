@@ -5,6 +5,23 @@ import enum
 from pathlib import Path
 
 
+def _to_uploads_url(image_path: str | None) -> str | None:
+    """저장된 이미지 경로(절대/상대, '\\' 또는 '/' 구분자 무관)를 /uploads/... URL로 변환한다.
+
+    PDF import는 uploads 루트 기준 상대 경로(Windows에서는 '\\' 포함)를 저장하는데,
+    기존 구현은 절대 경로만 변환하고 상대 경로는 그대로 반환해 브라우저가 못 읽는
+    URL(백슬래시 포함, 앞에 '/' 없음)이 나가는 문제가 있었다.
+    """
+    if not image_path:
+        return None
+    normalized = image_path.replace("\\", "/")
+    marker = "uploads/"
+    idx = normalized.find(marker)
+    if idx >= 0:
+        return "/" + normalized[idx:]
+    return f"/uploads/{Path(normalized).name}"
+
+
 class ProblemStatus(str, enum.Enum):
     UPLOADED = "uploaded"
     EXTRACTED = "extracted"
@@ -52,26 +69,8 @@ class Problem(Base):
 
     @property
     def problem_image_url(self) -> str | None:
-        if not self.problem_image_path:
-            return None
-        path = Path(self.problem_image_path)
-        if path.is_absolute():
-            try:
-                relative = path.relative_to(Path("uploads"))
-                return f"/uploads/{relative.as_posix()}"
-            except ValueError:
-                return f"/uploads/{path.name}"
-        return self.problem_image_path
+        return _to_uploads_url(self.problem_image_path)
 
     @property
     def page_image_url(self) -> str | None:
-        if not self.page_image_path:
-            return None
-        path = Path(self.page_image_path)
-        if path.is_absolute():
-            try:
-                relative = path.relative_to(Path("uploads"))
-                return f"/uploads/{relative.as_posix()}"
-            except ValueError:
-                return f"/uploads/{path.name}"
-        return self.page_image_path
+        return _to_uploads_url(self.page_image_path)
