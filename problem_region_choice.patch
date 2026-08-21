@@ -1,0 +1,1141 @@
+diff --git a/README.md b/README.md
+index 31380a0..2dd0f10 100644
+--- a/README.md
++++ b/README.md
+@@ -331,6 +331,54 @@ PDF 업로드 시 다음 단계를 자동으로 수행합니다:
+ - 페이지 이미지는 `uploads/pages/{source_pdf_id}/page_001.png` 형태로 저장됩니다.
+ - 문제 후보 이미지는 `uploads/problems/{source_pdf_id}/P_000001.png` 형태로 저장됩니다.
+ 
++## 문제 구조화 저장 (ProblemRegion / ProblemChoice)
++
++`Problem`은 문제 대표 정보(텍스트, 상태, crop_box 등)를 담고, 여기에 더해 두 테이블로 문제 내부 구조를 표현한다.
++
++- `ProblemRegion`: 문제 이미지 안의 의미 영역(전체 문제, 본문, 조건 박스, 그림, 그래프, 표, 보기 그룹/개별 보기, 수식, 지문 등). `problem_id`, `parent_region_id`로 계층을 표현하며, 좌표(x1,y1,x2,y2)와 crop 이미지 경로를 가질 수 있다.
++- `ProblemChoice`: 객관식 보기 하나하나의 구조화된 정보(순서, 원문자 라벨, 텍스트/LaTeX, 정답 여부).
++- 기존 `Problem.choices`(JSON 컬럼)는 삭제하지 않고 호환을 위해 그대로 둔다. 다만 이 프로젝트의 `Problem` 모델에는 애초에 `choices`/`answer_type`/`correct_answer` 필드가 없어서(아래 "적용 범위와 보류된 부분" 참고), 지금 단계에서는 `ProblemChoice`가 유일한 정식 선택지 저장소다.
++- 이 프로젝트 관례상 새 테이블도 DB-level `ForeignKey()`는 쓰지 않고 plain integer column(`problem_id`, `region_id`, `parent_region_id`)으로 관계를 표현한다. (단, 기존 `GeneratedProblem.source_problem_id`는 예외적으로 `ForeignKey("problems.id")`를 이미 쓰고 있었다.)
++
++예시:
++
++```text
++Problem 1
++├─ ProblemRegion: full_problem   (PDF import 시 자동 생성)
++├─ ProblemRegion: figure          (수동 생성)
++├─ ProblemChoice ① 13/2
++├─ ProblemChoice ② 27/4
++├─ ProblemChoice ③ 7
++├─ ProblemChoice ④ 29/4
++└─ ProblemChoice ⑤ 15/2
++```
++
++### API
++
++- `GET/POST /api/problems/{problem_id}/regions`, `PATCH/DELETE /api/problem-regions/{region_id}`
++- `GET/POST /api/problems/{problem_id}/choices`, `PATCH/DELETE /api/problem-choices/{choice_id}`
++- `POST /api/problems/{problem_id}/choices/replace` — 기존 choices를 전부 지우고 새로 저장 (`{"choices": ["13/2", "27/4", ...]}`). `choice_index`는 1부터, `choice_label`은 ①②③④⑤ 순서로 자동 부여되며 `is_correct`는 항상 `null`로 남는다 (정답은 추측하지 않는다).
++
++### full_problem region 자동 생성
++
++`ProblemRepository.create_from_pdf()`로 PDF에서 Problem이 생성될 때마다 `full_problem` region이 자동으로 함께 생성된다 (이미 있으면 중복 생성하지 않는다). `choice_group`/`choice_option` 개별 영역의 bbox 자동 검출은 아직 구현하지 않았다.
++
++### 적용 범위와 보류된 부분
++
++이 기능은 원래 스펙에서 OCR 결과 적용(`problem_ocr_service.apply_ocr_result`)과 Review UI 개선까지 포함했지만, 이 저장소에는 다음이 아직 존재하지 않아 해당 부분은 구현하지 않았다:
++
++- `app/services/problem_ocr_service.py` 자체가 없음 (`ocr_service.py`는 mock 스텁만 존재)
++- `Problem` 모델에 `answer_type`/`choices`/`correct_answer`/`ai_ocr_text`/`ocr_status`/`ocr_provider` 필드가 없음
++- Review UI(`app/templates/`, `review_router.py`), Worksheet Builder, Taxonomy 관리가 없음
++
++위 하위 시스템이 추가되면, `ProblemChoiceRepository.replace_choices_for_problem()`을 OCR 결과 적용 지점에 연결하고 Review UI에 영역/보기 섹션을 붙이는 식으로 자연스럽게 확장할 수 있도록 레포지토리/스키마/라우터를 준비해 두었다.
++
++### 마이그레이션 주의
++
++- 새 테이블(`problem_regions`, `problem_choices`)은 `create_tables()`로 생성된다.
++- `create_tables()`는 원래 `Problem`, `SourcePDF` 두 테이블만 생성하던 버그가 있었는데(`ConceptModule`/`SolutionModule`/`TypeCombination`/`GeneratedProblem` 관련 API가 전부 500 에러였다), 이번에 전체 8개 테이블을 생성하도록 함께 고쳤다.
++- `create_all()`은 기존 테이블에 컬럼을 추가하지 않는다. 개발 환경에서 스키마가 꼬이면 DB 파일을 삭제하고 재생성하는 걸 권장한다.
++
+ ## 현재 한계
+ 
+ - OCR 없음
+diff --git a/app/core/database.py b/app/core/database.py
+index 9563fb9..d7e86ef 100644
+--- a/app/core/database.py
++++ b/app/core/database.py
+@@ -1,3 +1,6 @@
++import importlib
++import sys
++
+ from sqlalchemy import create_engine
+ from sqlalchemy.ext.declarative import declarative_base
+ from sqlalchemy.orm import sessionmaker
+@@ -35,8 +38,53 @@ def get_db():
+ 
+ 
+ def create_tables():
+-    """테이블 생성"""
+-    from app.models.problem import Problem
+-    from app.models.source_pdf import SourcePDF
++    """테이블 생성
++
++    이전에는 tables=[Problem.__table__, SourcePDF.__table__] 두 테이블만 명시적으로 생성하고 있어서
++    ConceptModule/SolutionModule/TypeCombination/GeneratedProblem 테이블이 만들어지지 않고,
++    해당 API 호출 시 'no such table' 500 에러가 발생하는 버그가 있었다.
++
++    Base.metadata.create_all(bind=engine)처럼 전체 metadata를 한 번에 생성하는 방식은 쓰지 않는다.
++    테스트 스위트가 DATABASE_URL을 바꿔가며 이 모듈을 importlib.reload()하는 패턴을 쓰는데,
++    reload될 때마다 Base = declarative_base()가 다시 실행되어 새 MetaData가 만들어지는 반면
++    이미 import되어 캐시된 모델 모듈들은 예전 Base(및 예전 MetaData)에 묶인 채로 남는다.
++    그 결과 Base.metadata에는 테이블이 하나도 등록되지 않은 상태가 될 수 있다.
++    각 모델의 __table__을 직접 넘기면 어느 Base에 묶여 있었는지와 무관하게 항상 정확히 생성된다.
++
++    다만 GeneratedProblem.source_problem_id처럼 문자열 기반 ForeignKey("problems.id")를 쓰는
++    컬럼은, 참조 대상 Problem 모델이 '다른 reload epoch'의 Base.metadata에 묶여 있으면
++    같은 MetaData 안에서 "problems" 테이블을 찾지 못해 NoReferencedTableError가 난다.
++    그래서 매번 모델 모듈을 강제로 reload해서 전부 지금 이 Base에 다시 묶은 뒤 생성한다.
++    """
++
++    def _ensure_model(module_name: str, class_name: str):
++        module = sys.modules.get(module_name) or importlib.import_module(module_name)
++        cls = getattr(module, class_name)
++        if cls.metadata is not Base.metadata:
++            # 이 클래스는 예전 reload epoch의 Base에 묶여 있다 -> 지금 Base로 다시 묶는다.
++            module = importlib.reload(module)
++            cls = getattr(module, class_name)
++        return cls
++
++    Problem = _ensure_model("app.models.problem", "Problem")
++    SourcePDF = _ensure_model("app.models.source_pdf", "SourcePDF")
++    ConceptModule = _ensure_model("app.models.concept_module", "ConceptModule")
++    SolutionModule = _ensure_model("app.models.solution_module", "SolutionModule")
++    TypeCombination = _ensure_model("app.models.type_combination", "TypeCombination")
++    GeneratedProblem = _ensure_model("app.models.generated_problem", "GeneratedProblem")
++    ProblemRegion = _ensure_model("app.models.problem_region", "ProblemRegion")
++    ProblemChoice = _ensure_model("app.models.problem_choice", "ProblemChoice")
+ 
+-    Base.metadata.create_all(bind=_init_engine(), tables=[Problem.__table__, SourcePDF.__table__])
+\ No newline at end of file
++    Base.metadata.create_all(
++        bind=_init_engine(),
++        tables=[
++            Problem.__table__,
++            SourcePDF.__table__,
++            ConceptModule.__table__,
++            SolutionModule.__table__,
++            TypeCombination.__table__,
++            GeneratedProblem.__table__,
++            ProblemRegion.__table__,
++            ProblemChoice.__table__,
++        ],
++    )
+\ No newline at end of file
+diff --git a/app/main.py b/app/main.py
+index 8ecff63..40ac115 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -10,6 +10,8 @@ from app.routers import (
+     generation_router,
+     analysis_router,
+     pdf_import_router,
++    problem_region_router,
++    problem_choice_router,
+ )
+ import app.models.source_pdf  # noqa: F401
+ 
+@@ -35,6 +37,8 @@ app.include_router(type_combination_router.router, prefix="/type-combinations",
+ app.include_router(generation_router.router, prefix="/generate", tags=["Generation"])
+ app.include_router(analysis_router.router, prefix="/analysis", tags=["Analysis"])
+ app.include_router(pdf_import_router.router)
++app.include_router(problem_region_router.router)
++app.include_router(problem_choice_router.router)
+ 
+ 
+ @app.get("/")
+diff --git a/app/models/problem_choice.py b/app/models/problem_choice.py
+new file mode 100644
+index 0000000..76ebb78
+--- /dev/null
++++ b/app/models/problem_choice.py
+@@ -0,0 +1,33 @@
++from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
++from sqlalchemy.sql import func
++from app.core.database import Base
++
++
++# choice_index(1부터) 순서에 대응하는 원문자 라벨
++CHOICE_LABELS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"]
++
++
++class ProblemChoice(Base):
++    """객관식 보기 하나의 의미 정보를 저장한다.
++
++    프로젝트 관례상 DB-level ForeignKey()는 사용하지 않고,
++    problem_id / region_id는 plain integer column으로 관계를 표현한다.
++    """
++
++    __tablename__ = "problem_choices"
++
++    id = Column(Integer, primary_key=True, index=True)
++    problem_id = Column(Integer, nullable=False, index=True)
++    region_id = Column(Integer, nullable=True)
++    choice_index = Column(Integer, nullable=False)
++    choice_label = Column(String, nullable=True)
++    text = Column(Text, nullable=True)
++    latex_text = Column(Text, nullable=True)
++    normalized_text = Column(Text, nullable=True)
++
++    # 정답 여부. 답지/해설이 없으면 절대 추측해서 채우지 않는다 (null 유지).
++    is_correct = Column(Boolean, nullable=True)
++    is_distractor = Column(Boolean, nullable=True)
++
++    created_at = Column(DateTime(timezone=True), server_default=func.now())
++    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+diff --git a/app/models/problem_region.py b/app/models/problem_region.py
+new file mode 100644
+index 0000000..77b6274
+--- /dev/null
++++ b/app/models/problem_region.py
+@@ -0,0 +1,61 @@
++from sqlalchemy import Column, Integer, String, Text, Float, DateTime
++from sqlalchemy.sql import func
++from app.core.database import Base
++
++
++# 지원하는 region_type 값 (DB level enum은 사용하지 않고 문자열로 저장한다)
++REGION_TYPES = [
++    "full_problem",
++    "question_body",
++    "condition_box",
++    "figure",
++    "graph",
++    "table",
++    "choice_group",
++    "choice_option",
++    "formula",
++    "passage",
++    "unknown",
++]
++
++
++class ProblemRegion(Base):
++    """문제 이미지 안의 의미 영역(전체 문제, 본문, 그림, 보기 등)을 저장한다.
++
++    프로젝트 관례상 DB-level ForeignKey()는 사용하지 않고,
++    problem_id / parent_region_id는 plain integer column으로 관계를 표현한다.
++    """
++
++    __tablename__ = "problem_regions"
++
++    id = Column(Integer, primary_key=True, index=True)
++    problem_id = Column(Integer, nullable=False, index=True)
++    parent_region_id = Column(Integer, nullable=True)
++    region_type = Column(String, nullable=False, index=True)
++    label = Column(String, nullable=True)
++    order_index = Column(Integer, default=0)
++    page_number = Column(Integer, nullable=True)
++
++    # 좌표 정보
++    x1 = Column(Float, nullable=True)
++    y1 = Column(Float, nullable=True)
++    x2 = Column(Float, nullable=True)
++    y2 = Column(Float, nullable=True)
++    page_width = Column(Float, nullable=True)
++    page_height = Column(Float, nullable=True)
++
++    # 이미지 경로
++    image_path = Column(String, nullable=True)
++    cropped_image_path = Column(String, nullable=True)
++
++    # 텍스트 정보
++    extracted_text = Column(Text, nullable=True)
++    latex_text = Column(Text, nullable=True)
++    normalized_text = Column(Text, nullable=True)
++
++    # 메타 정보
++    confidence = Column(Float, nullable=True)
++    provider = Column(String, nullable=True)
++
++    created_at = Column(DateTime(timezone=True), server_default=func.now())
++    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+diff --git a/app/repositories/problem_choice_repository.py b/app/repositories/problem_choice_repository.py
+new file mode 100644
+index 0000000..b497f33
+--- /dev/null
++++ b/app/repositories/problem_choice_repository.py
+@@ -0,0 +1,85 @@
++from sqlalchemy.orm import Session
++from typing import List, Optional
++
++from app.models.problem_choice import ProblemChoice, CHOICE_LABELS
++from app.schemas.problem_choice_schema import ProblemChoiceCreate, ProblemChoiceUpdate
++
++
++class ProblemChoiceRepository:
++    def __init__(self, db: Session):
++        self.db = db
++
++    async def create(self, choice: ProblemChoiceCreate) -> ProblemChoice:
++        db_choice = ProblemChoice(**choice.model_dump())
++        self.db.add(db_choice)
++        self.db.commit()
++        self.db.refresh(db_choice)
++        return db_choice
++
++    async def get(self, choice_id: int) -> Optional[ProblemChoice]:
++        return self.db.query(ProblemChoice).filter(ProblemChoice.id == choice_id).first()
++
++    async def list_by_problem(self, problem_id: int) -> List[ProblemChoice]:
++        return (
++            self.db.query(ProblemChoice)
++            .filter(ProblemChoice.problem_id == problem_id)
++            .order_by(ProblemChoice.choice_index.asc())
++            .all()
++        )
++
++    async def update(self, choice_id: int, choice_update: ProblemChoiceUpdate) -> Optional[ProblemChoice]:
++        db_choice = self.db.query(ProblemChoice).filter(ProblemChoice.id == choice_id).first()
++        if db_choice:
++            for key, value in choice_update.model_dump(exclude_unset=True).items():
++                setattr(db_choice, key, value)
++            self.db.commit()
++            self.db.refresh(db_choice)
++        return db_choice
++
++    async def delete(self, choice_id: int) -> bool:
++        db_choice = self.db.query(ProblemChoice).filter(ProblemChoice.id == choice_id).first()
++        if db_choice:
++            self.db.delete(db_choice)
++            self.db.commit()
++            return True
++        return False
++
++    async def delete_by_problem(self, problem_id: int) -> int:
++        deleted = self.db.query(ProblemChoice).filter(ProblemChoice.problem_id == problem_id).delete()
++        self.db.commit()
++        return deleted
++
++    async def replace_choices_for_problem(self, problem_id: int, choices: List[str]) -> List[ProblemChoice]:
++        """기존 choices를 전부 삭제하고 새 choices를 순서대로 저장한다.
++
++        choice_index는 1부터 시작하고, choice_label은 ①②③④⑤ 순서로 부여한다.
++        정답은 추측하지 않으므로 is_correct는 항상 null로 남긴다.
++        비어 있거나 공백뿐인 항목은 건너뛴다 (malformed/empty 입력 방어).
++        """
++        self.db.query(ProblemChoice).filter(ProblemChoice.problem_id == problem_id).delete()
++
++        created: List[ProblemChoice] = []
++        index = 1
++        for raw_text in choices or []:
++            text = (raw_text or "").strip()
++            if not text:
++                continue
++            label = CHOICE_LABELS[index - 1] if index - 1 < len(CHOICE_LABELS) else None
++            db_choice = ProblemChoice(
++                problem_id=problem_id,
++                choice_index=index,
++                choice_label=label,
++                text=text,
++                latex_text=text,
++                normalized_text=text,
++                is_correct=None,
++                is_distractor=None,
++            )
++            self.db.add(db_choice)
++            created.append(db_choice)
++            index += 1
++
++        self.db.commit()
++        for db_choice in created:
++            self.db.refresh(db_choice)
++        return created
+diff --git a/app/repositories/problem_region_repository.py b/app/repositories/problem_region_repository.py
+new file mode 100644
+index 0000000..716cd4f
+--- /dev/null
++++ b/app/repositories/problem_region_repository.py
+@@ -0,0 +1,127 @@
++from sqlalchemy.orm import Session
++from typing import List, Optional
++
++from app.models.problem import Problem
++from app.models.problem_region import ProblemRegion
++from app.schemas.problem_region_schema import ProblemRegionCreate, ProblemRegionUpdate
++
++
++class ProblemRegionRepository:
++    def __init__(self, db: Session):
++        self.db = db
++
++    async def create(self, region: ProblemRegionCreate) -> ProblemRegion:
++        db_region = ProblemRegion(**region.model_dump())
++        self.db.add(db_region)
++        self.db.commit()
++        self.db.refresh(db_region)
++        return db_region
++
++    async def get(self, region_id: int) -> Optional[ProblemRegion]:
++        return self.db.query(ProblemRegion).filter(ProblemRegion.id == region_id).first()
++
++    async def list_by_problem(self, problem_id: int) -> List[ProblemRegion]:
++        return (
++            self.db.query(ProblemRegion)
++            .filter(ProblemRegion.problem_id == problem_id)
++            .order_by(ProblemRegion.order_index.asc(), ProblemRegion.id.asc())
++            .all()
++        )
++
++    async def list_by_problem_and_type(self, problem_id: int, region_type: str) -> List[ProblemRegion]:
++        return (
++            self.db.query(ProblemRegion)
++            .filter(ProblemRegion.problem_id == problem_id, ProblemRegion.region_type == region_type)
++            .order_by(ProblemRegion.order_index.asc(), ProblemRegion.id.asc())
++            .all()
++        )
++
++    async def update(self, region_id: int, region_update: ProblemRegionUpdate) -> Optional[ProblemRegion]:
++        db_region = self.db.query(ProblemRegion).filter(ProblemRegion.id == region_id).first()
++        if db_region:
++            for key, value in region_update.model_dump(exclude_unset=True).items():
++                setattr(db_region, key, value)
++            self.db.commit()
++            self.db.refresh(db_region)
++        return db_region
++
++    async def delete(self, region_id: int) -> bool:
++        db_region = self.db.query(ProblemRegion).filter(ProblemRegion.id == region_id).first()
++        if db_region:
++            self.db.delete(db_region)
++            self.db.commit()
++            return True
++        return False
++
++    async def delete_by_problem(self, problem_id: int) -> int:
++        deleted = (
++            self.db.query(ProblemRegion)
++            .filter(ProblemRegion.problem_id == problem_id)
++            .delete()
++        )
++        self.db.commit()
++        return deleted
++
++    def create_full_problem_region_from_problem(self, problem: Problem) -> Optional[ProblemRegion]:
++        """Problem으로부터 full_problem region을 생성한다 (동기 메서드).
++
++        problem_repository.create_from_pdf()가 동기 메서드이기 때문에 이 메서드도
++        같은 흐름에서 바로 호출할 수 있도록 동기로 작성한다 (기존 create_from_pdf 관례와 동일).
++        이미 해당 problem에 full_problem region이 있으면 중복 생성하지 않는다.
++        """
++        if not problem.problem_image_path:
++            return None
++
++        existing = (
++            self.db.query(ProblemRegion)
++            .filter(ProblemRegion.problem_id == problem.id, ProblemRegion.region_type == "full_problem")
++            .first()
++        )
++        if existing:
++            return existing
++
++        crop_box = problem.crop_box or {}
++        x1 = crop_box.get("x")
++        y1 = crop_box.get("y")
++        x2 = (crop_box.get("x") + crop_box.get("width")) if crop_box.get("x") is not None and crop_box.get("width") is not None else None
++        y2 = (crop_box.get("y") + crop_box.get("height")) if crop_box.get("y") is not None and crop_box.get("height") is not None else None
++
++        page_width, page_height = self._try_read_image_size(problem.page_image_path)
++
++        db_region = ProblemRegion(
++            problem_id=problem.id,
++            region_type="full_problem",
++            label="전체 문제",
++            order_index=0,
++            page_number=problem.page_number,
++            x1=x1,
++            y1=y1,
++            x2=x2,
++            y2=y2,
++            page_width=page_width,
++            page_height=page_height,
++            image_path=problem.problem_image_path,
++            cropped_image_path=problem.problem_image_path,
++            extracted_text=problem.raw_ocr_text,
++            latex_text=problem.latex_text,
++            normalized_text=None,
++            provider=None,
++            confidence=None,
++        )
++        self.db.add(db_region)
++        self.db.commit()
++        self.db.refresh(db_region)
++        return db_region
++
++    @staticmethod
++    def _try_read_image_size(image_path: Optional[str]):
++        """가능하면 page 이미지 크기를 읽어온다. 실패해도 region 생성 자체는 막지 않는다."""
++        if not image_path:
++            return None, None
++        try:
++            from PIL import Image
++
++            with Image.open(image_path) as img:
++                return float(img.width), float(img.height)
++        except Exception:
++            return None, None
+diff --git a/app/repositories/problem_repository.py b/app/repositories/problem_repository.py
+index a17f548..37dfaae 100644
+--- a/app/repositories/problem_repository.py
++++ b/app/repositories/problem_repository.py
+@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
+ from typing import List, Optional
+ from app.models.problem import Problem
+ from app.schemas.problem_schema import ProblemCreate, ProblemUpdate
++from app.repositories.problem_region_repository import ProblemRegionRepository
+ 
+ 
+ class ProblemRepository:
+@@ -49,6 +50,10 @@ class ProblemRepository:
+         self.db.add(db_problem)
+         self.db.commit()
+         self.db.refresh(db_problem)
++
++        # 문제가 생성될 때 full_problem region을 자동 생성한다 (§6).
++        ProblemRegionRepository(self.db).create_full_problem_region_from_problem(db_problem)
++
+         return db_problem
+ 
+     async def get_by_id(self, problem_id: int) -> Optional[Problem]:
+diff --git a/app/routers/generation_router.py b/app/routers/generation_router.py
+index c87dc70..102ab5d 100644
+--- a/app/routers/generation_router.py
++++ b/app/routers/generation_router.py
+@@ -8,6 +8,7 @@ from app.repositories.solution_module_repository import SolutionModuleRepository
+ from app.repositories.type_combination_repository import TypeCombinationRepository
+ from app.repositories.generated_problem_repository import GeneratedProblemRepository
+ from app.utils.id_generator import generate_id
++from app.schemas.generation_schema import GeneratedProblemBase
+ 
+ router = APIRouter()
+ 
+@@ -41,7 +42,7 @@ async def generate_problem(
+         "solution_text": result["mock_problem"]["solution_text"]
+     }
+     
+-    await generated_repo.create(generated_problem_data)
++    await generated_repo.create(GeneratedProblemBase(**generated_problem_data))
+     
+     return GenerationResponse(
+         generated_problem_id=generated_problem_id,
+diff --git a/app/routers/problem_choice_router.py b/app/routers/problem_choice_router.py
+new file mode 100644
+index 0000000..4b99cf5
+--- /dev/null
++++ b/app/routers/problem_choice_router.py
+@@ -0,0 +1,52 @@
++from fastapi import APIRouter, Depends, HTTPException
++from sqlalchemy.orm import Session
++from typing import List
++
++from app.core.database import get_db
++from app.schemas.problem_choice_schema import (
++    ProblemChoice,
++    ProblemChoiceCreate,
++    ProblemChoiceUpdate,
++    ProblemChoiceReplaceRequest,
++)
++from app.repositories.problem_choice_repository import ProblemChoiceRepository
++
++router = APIRouter(tags=["Problem Choices"])
++
++
++@router.get("/api/problems/{problem_id}/choices", response_model=List[ProblemChoice])
++async def get_problem_choices(problem_id: int, db: Session = Depends(get_db)):
++    repo = ProblemChoiceRepository(db)
++    return await repo.list_by_problem(problem_id)
++
++
++@router.post("/api/problems/{problem_id}/choices", response_model=ProblemChoice)
++async def create_problem_choice(problem_id: int, choice: ProblemChoiceCreate, db: Session = Depends(get_db)):
++    if choice.problem_id != problem_id:
++        raise HTTPException(status_code=400, detail="problem_id가 URL 경로와 일치하지 않습니다.")
++    repo = ProblemChoiceRepository(db)
++    return await repo.create(choice)
++
++
++@router.post("/api/problems/{problem_id}/choices/replace", response_model=List[ProblemChoice])
++async def replace_problem_choices(problem_id: int, request: ProblemChoiceReplaceRequest, db: Session = Depends(get_db)):
++    repo = ProblemChoiceRepository(db)
++    return await repo.replace_choices_for_problem(problem_id, request.choices)
++
++
++@router.patch("/api/problem-choices/{choice_id}", response_model=ProblemChoice)
++async def update_problem_choice(choice_id: int, choice_update: ProblemChoiceUpdate, db: Session = Depends(get_db)):
++    repo = ProblemChoiceRepository(db)
++    choice = await repo.update(choice_id, choice_update)
++    if not choice:
++        raise HTTPException(status_code=404, detail="Problem choice not found")
++    return choice
++
++
++@router.delete("/api/problem-choices/{choice_id}")
++async def delete_problem_choice(choice_id: int, db: Session = Depends(get_db)):
++    repo = ProblemChoiceRepository(db)
++    deleted = await repo.delete(choice_id)
++    if not deleted:
++        raise HTTPException(status_code=404, detail="Problem choice not found")
++    return {"message": "Problem choice deleted", "choice_id": choice_id}
+diff --git a/app/routers/problem_region_router.py b/app/routers/problem_region_router.py
+new file mode 100644
+index 0000000..dda91d5
+--- /dev/null
++++ b/app/routers/problem_region_router.py
+@@ -0,0 +1,41 @@
++from fastapi import APIRouter, Depends, HTTPException
++from sqlalchemy.orm import Session
++from typing import List
++
++from app.core.database import get_db
++from app.schemas.problem_region_schema import ProblemRegion, ProblemRegionCreate, ProblemRegionUpdate
++from app.repositories.problem_region_repository import ProblemRegionRepository
++
++router = APIRouter(tags=["Problem Regions"])
++
++
++@router.get("/api/problems/{problem_id}/regions", response_model=List[ProblemRegion])
++async def get_problem_regions(problem_id: int, db: Session = Depends(get_db)):
++    repo = ProblemRegionRepository(db)
++    return await repo.list_by_problem(problem_id)
++
++
++@router.post("/api/problems/{problem_id}/regions", response_model=ProblemRegion)
++async def create_problem_region(problem_id: int, region: ProblemRegionCreate, db: Session = Depends(get_db)):
++    if region.problem_id != problem_id:
++        raise HTTPException(status_code=400, detail="problem_id가 URL 경로와 일치하지 않습니다.")
++    repo = ProblemRegionRepository(db)
++    return await repo.create(region)
++
++
++@router.patch("/api/problem-regions/{region_id}", response_model=ProblemRegion)
++async def update_problem_region(region_id: int, region_update: ProblemRegionUpdate, db: Session = Depends(get_db)):
++    repo = ProblemRegionRepository(db)
++    region = await repo.update(region_id, region_update)
++    if not region:
++        raise HTTPException(status_code=404, detail="Problem region not found")
++    return region
++
++
++@router.delete("/api/problem-regions/{region_id}")
++async def delete_problem_region(region_id: int, db: Session = Depends(get_db)):
++    repo = ProblemRegionRepository(db)
++    deleted = await repo.delete(region_id)
++    if not deleted:
++        raise HTTPException(status_code=404, detail="Problem region not found")
++    return {"message": "Problem region deleted", "region_id": region_id}
+diff --git a/app/schemas/problem_choice_schema.py b/app/schemas/problem_choice_schema.py
+new file mode 100644
+index 0000000..2bdb760
+--- /dev/null
++++ b/app/schemas/problem_choice_schema.py
+@@ -0,0 +1,43 @@
++from pydantic import BaseModel
++from typing import Optional, List
++from datetime import datetime
++
++
++class ProblemChoiceBase(BaseModel):
++    problem_id: int
++    region_id: Optional[int] = None
++    choice_index: int
++    choice_label: Optional[str] = None
++    text: Optional[str] = None
++    latex_text: Optional[str] = None
++    normalized_text: Optional[str] = None
++    is_correct: Optional[bool] = None
++    is_distractor: Optional[bool] = None
++
++
++class ProblemChoiceCreate(ProblemChoiceBase):
++    pass
++
++
++class ProblemChoiceUpdate(BaseModel):
++    region_id: Optional[int] = None
++    choice_index: Optional[int] = None
++    choice_label: Optional[str] = None
++    text: Optional[str] = None
++    latex_text: Optional[str] = None
++    normalized_text: Optional[str] = None
++    is_correct: Optional[bool] = None
++    is_distractor: Optional[bool] = None
++
++
++class ProblemChoice(ProblemChoiceBase):
++    id: int
++    created_at: datetime
++    updated_at: Optional[datetime] = None
++
++    class Config:
++        from_attributes = True
++
++
++class ProblemChoiceReplaceRequest(BaseModel):
++    choices: List[str]
+diff --git a/app/schemas/problem_region_schema.py b/app/schemas/problem_region_schema.py
+new file mode 100644
+index 0000000..bdb44b2
+--- /dev/null
++++ b/app/schemas/problem_region_schema.py
+@@ -0,0 +1,67 @@
++from pydantic import BaseModel
++from typing import Optional
++from datetime import datetime
++
++
++class ProblemRegionBase(BaseModel):
++    problem_id: int
++    parent_region_id: Optional[int] = None
++    region_type: str
++    label: Optional[str] = None
++    order_index: int = 0
++    page_number: Optional[int] = None
++
++    x1: Optional[float] = None
++    y1: Optional[float] = None
++    x2: Optional[float] = None
++    y2: Optional[float] = None
++    page_width: Optional[float] = None
++    page_height: Optional[float] = None
++
++    image_path: Optional[str] = None
++    cropped_image_path: Optional[str] = None
++
++    extracted_text: Optional[str] = None
++    latex_text: Optional[str] = None
++    normalized_text: Optional[str] = None
++
++    confidence: Optional[float] = None
++    provider: Optional[str] = None
++
++
++class ProblemRegionCreate(ProblemRegionBase):
++    pass
++
++
++class ProblemRegionUpdate(BaseModel):
++    parent_region_id: Optional[int] = None
++    region_type: Optional[str] = None
++    label: Optional[str] = None
++    order_index: Optional[int] = None
++    page_number: Optional[int] = None
++
++    x1: Optional[float] = None
++    y1: Optional[float] = None
++    x2: Optional[float] = None
++    y2: Optional[float] = None
++    page_width: Optional[float] = None
++    page_height: Optional[float] = None
++
++    image_path: Optional[str] = None
++    cropped_image_path: Optional[str] = None
++
++    extracted_text: Optional[str] = None
++    latex_text: Optional[str] = None
++    normalized_text: Optional[str] = None
++
++    confidence: Optional[float] = None
++    provider: Optional[str] = None
++
++
++class ProblemRegion(ProblemRegionBase):
++    id: int
++    created_at: datetime
++    updated_at: Optional[datetime] = None
++
++    class Config:
++        from_attributes = True
+diff --git a/tests/test_full_problem_region_autocreation.py b/tests/test_full_problem_region_autocreation.py
+new file mode 100644
+index 0000000..e72e555
+--- /dev/null
++++ b/tests/test_full_problem_region_autocreation.py
+@@ -0,0 +1,37 @@
++import importlib
++
++import pytest
++
++
++@pytest.mark.asyncio
++async def test_create_from_pdf_autocreates_full_problem_region(tmp_path, monkeypatch):
++    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
++
++    import app.core.database as database_module
++
++    importlib.reload(database_module)
++    database_module.create_tables()
++    db = database_module.SessionLocal()
++
++    from app.repositories.problem_repository import ProblemRepository
++    from app.repositories.problem_region_repository import ProblemRegionRepository
++
++    repo = ProblemRepository(db)
++    problem = repo.create_from_pdf(
++        source_pdf_id="PDF_TEST",
++        page_number=1,
++        problem_number=1,
++        elective_subject="common",
++        problem_image_path=str(tmp_path / "P_000001.png"),
++        page_image_path=str(tmp_path / "page_001.png"),
++        crop_box={"x": 0, "y": 0, "width": 200, "height": 100},
++    )
++
++    region_repo = ProblemRegionRepository(db)
++    regions = await region_repo.list_by_problem(problem.id)
++
++    assert len(regions) == 1
++    assert regions[0].region_type == "full_problem"
++    assert regions[0].label == "전체 문제"
++
++    db.close()
+diff --git a/tests/test_problem_choice_repository.py b/tests/test_problem_choice_repository.py
+new file mode 100644
+index 0000000..925a7f5
+--- /dev/null
++++ b/tests/test_problem_choice_repository.py
+@@ -0,0 +1,83 @@
++import importlib
++
++import pytest
++
++
++def _fresh_db_session(tmp_path, monkeypatch):
++    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
++
++    import app.core.database as database_module
++
++    importlib.reload(database_module)
++    database_module.create_tables()
++    return database_module.SessionLocal()
++
++
++@pytest.mark.asyncio
++async def test_replace_choices_assigns_index_and_labels(tmp_path, monkeypatch):
++    db = _fresh_db_session(tmp_path, monkeypatch)
++    from app.repositories.problem_choice_repository import ProblemChoiceRepository
++
++    repo = ProblemChoiceRepository(db)
++    choices = await repo.replace_choices_for_problem(1, ["13/2", "27/4", "7", "29/4", "15/2"])
++
++    assert [c.choice_index for c in choices] == [1, 2, 3, 4, 5]
++    assert [c.choice_label for c in choices] == ["①", "②", "③", "④", "⑤"]
++    assert choices[0].text == "13/2"
++    assert all(c.is_correct is None for c in choices)
++
++    db.close()
++
++
++@pytest.mark.asyncio
++async def test_replace_choices_removes_previous_choices(tmp_path, monkeypatch):
++    db = _fresh_db_session(tmp_path, monkeypatch)
++    from app.repositories.problem_choice_repository import ProblemChoiceRepository
++
++    repo = ProblemChoiceRepository(db)
++    await repo.replace_choices_for_problem(1, ["1", "2", "3"])
++    new_choices = await repo.replace_choices_for_problem(1, ["a", "b"])
++
++    all_choices = await repo.list_by_problem(1)
++    assert len(all_choices) == 2
++    assert [c.text for c in all_choices] == ["a", "b"]
++    assert len(new_choices) == 2
++
++    db.close()
++
++
++@pytest.mark.asyncio
++async def test_replace_choices_skips_empty_entries(tmp_path, monkeypatch):
++    db = _fresh_db_session(tmp_path, monkeypatch)
++    from app.repositories.problem_choice_repository import ProblemChoiceRepository
++
++    repo = ProblemChoiceRepository(db)
++    choices = await repo.replace_choices_for_problem(1, ["13/2", "  ", "", "7"])
++
++    assert [c.text for c in choices] == ["13/2", "7"]
++    assert [c.choice_index for c in choices] == [1, 2]
++
++    db.close()
++
++
++@pytest.mark.asyncio
++async def test_get_update_delete_choice(tmp_path, monkeypatch):
++    db = _fresh_db_session(tmp_path, monkeypatch)
++    from app.repositories.problem_choice_repository import ProblemChoiceRepository
++    from app.schemas.problem_choice_schema import ProblemChoiceUpdate
++
++    repo = ProblemChoiceRepository(db)
++    choices = await repo.replace_choices_for_problem(1, ["13/2"])
++    choice_id = choices[0].id
++
++    fetched = await repo.get(choice_id)
++    assert fetched is not None
++
++    updated = await repo.update(choice_id, ProblemChoiceUpdate(is_correct=True))
++    assert updated.is_correct is True
++
++    deleted = await repo.delete(choice_id)
++    assert deleted is True
++    assert await repo.get(choice_id) is None
++
++    db.close()
+diff --git a/tests/test_problem_choice_router.py b/tests/test_problem_choice_router.py
+new file mode 100644
+index 0000000..194aed3
+--- /dev/null
++++ b/tests/test_problem_choice_router.py
+@@ -0,0 +1,62 @@
++import importlib
++
++from fastapi.testclient import TestClient
++
++
++def _fresh_client(tmp_path, monkeypatch):
++    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
++    monkeypatch.setenv("UPLOADS_ROOT", str(tmp_path / "uploads"))
++
++    import app.core.database as database_module
++
++    importlib.reload(database_module)
++
++    import app.main as main_module
++
++    importlib.reload(main_module)
++    return TestClient(main_module.app)
++
++
++def _create_problem(client: TestClient) -> int:
++    response = client.post("/problems/", json={"title": "테스트 문제"})
++    assert response.status_code == 200
++    return response.json()["id"]
++
++
++def test_replace_choices_endpoint(tmp_path, monkeypatch):
++    client = _fresh_client(tmp_path, monkeypatch)
++    problem_id = _create_problem(client)
++
++    resp = client.post(
++        f"/api/problems/{problem_id}/choices/replace",
++        json={"choices": ["13/2", "27/4", "7", "29/4", "15/2"]},
++    )
++    assert resp.status_code == 200
++    body = resp.json()
++    assert len(body) == 5
++    assert [c["choice_label"] for c in body] == ["①", "②", "③", "④", "⑤"]
++    assert all(c["is_correct"] is None for c in body)
++
++    list_resp = client.get(f"/api/problems/{problem_id}/choices")
++    assert len(list_resp.json()) == 5
++
++
++def test_update_and_delete_choice(tmp_path, monkeypatch):
++    client = _fresh_client(tmp_path, monkeypatch)
++    problem_id = _create_problem(client)
++
++    replace_resp = client.post(
++        f"/api/problems/{problem_id}/choices/replace",
++        json={"choices": ["13/2"]},
++    )
++    choice_id = replace_resp.json()[0]["id"]
++
++    patch_resp = client.patch(f"/api/problem-choices/{choice_id}", json={"is_correct": True})
++    assert patch_resp.status_code == 200
++    assert patch_resp.json()["is_correct"] is True
++
++    delete_resp = client.delete(f"/api/problem-choices/{choice_id}")
++    assert delete_resp.status_code == 200
++
++    missing_resp = client.patch(f"/api/problem-choices/{choice_id}", json={"is_correct": False})
++    assert missing_resp.status_code == 404
+diff --git a/tests/test_problem_region_repository.py b/tests/test_problem_region_repository.py
+new file mode 100644
+index 0000000..1a6432c
+--- /dev/null
++++ b/tests/test_problem_region_repository.py
+@@ -0,0 +1,104 @@
++import importlib
++
++import pytest
++
++
++def _fresh_db_session(tmp_path, monkeypatch):
++    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
++
++    import app.core.database as database_module
++
++    importlib.reload(database_module)
++    database_module.create_tables()
++    return database_module.SessionLocal()
++
++
++@pytest.mark.asyncio
++async def test_create_and_list_regions_by_problem(tmp_path, monkeypatch):
++    db = _fresh_db_session(tmp_path, monkeypatch)
++    from app.repositories.problem_region_repository import ProblemRegionRepository
++    from app.schemas.problem_region_schema import ProblemRegionCreate
++
++    repo = ProblemRegionRepository(db)
++
++    await repo.create(ProblemRegionCreate(problem_id=1, region_type="full_problem", label="전체 문제", order_index=0))
++    await repo.create(ProblemRegionCreate(problem_id=1, region_type="figure", label="그림", order_index=1))
++    await repo.create(ProblemRegionCreate(problem_id=2, region_type="full_problem", label="다른 문제"))
++
++    regions = await repo.list_by_problem(1)
++    assert len(regions) == 2
++    assert [r.region_type for r in regions] == ["full_problem", "figure"]
++
++    db.close()
++
++
++@pytest.mark.asyncio
++async def test_list_by_problem_and_type_filters(tmp_path, monkeypatch):
++    db = _fresh_db_session(tmp_path, monkeypatch)
++    from app.repositories.problem_region_repository import ProblemRegionRepository
++    from app.schemas.problem_region_schema import ProblemRegionCreate
++
++    repo = ProblemRegionRepository(db)
++    await repo.create(ProblemRegionCreate(problem_id=1, region_type="choice_option", label="①"))
++    await repo.create(ProblemRegionCreate(problem_id=1, region_type="choice_option", label="②"))
++    await repo.create(ProblemRegionCreate(problem_id=1, region_type="figure", label="그림"))
++
++    options = await repo.list_by_problem_and_type(1, "choice_option")
++    assert len(options) == 2
++
++    db.close()
++
++
++@pytest.mark.asyncio
++async def test_update_and_delete_region(tmp_path, monkeypatch):
++    db = _fresh_db_session(tmp_path, monkeypatch)
++    from app.repositories.problem_region_repository import ProblemRegionRepository
++    from app.schemas.problem_region_schema import ProblemRegionCreate, ProblemRegionUpdate
++
++    repo = ProblemRegionRepository(db)
++    region = await repo.create(ProblemRegionCreate(problem_id=1, region_type="figure", label="그림"))
++
++    updated = await repo.update(region.id, ProblemRegionUpdate(label="수정된 그림"))
++    assert updated.label == "수정된 그림"
++
++    deleted = await repo.delete(region.id)
++    assert deleted is True
++    assert await repo.get(region.id) is None
++
++    db.close()
++
++
++@pytest.mark.asyncio
++async def test_create_full_problem_region_from_problem_avoids_duplicates(tmp_path, monkeypatch):
++    db = _fresh_db_session(tmp_path, monkeypatch)
++    from app.models.problem import Problem
++    from app.repositories.problem_region_repository import ProblemRegionRepository
++
++    problem = Problem(
++        title="",
++        source_type="pdf",
++        problem_image_path=str(tmp_path / "P_000001.png"),
++        page_number=1,
++        crop_box={"x": 10, "y": 20, "width": 100, "height": 50},
++    )
++    db.add(problem)
++    db.commit()
++    db.refresh(problem)
++
++    repo = ProblemRegionRepository(db)
++    first = repo.create_full_problem_region_from_problem(problem)
++    assert first is not None
++    assert first.region_type == "full_problem"
++    assert first.x1 == 10
++    assert first.y1 == 20
++    assert first.x2 == 110
++    assert first.y2 == 70
++
++    # 중복 생성 방지: 두 번째 호출은 기존 region을 그대로 반환한다.
++    second = repo.create_full_problem_region_from_problem(problem)
++    assert second.id == first.id
++
++    regions = await repo.list_by_problem(problem.id)
++    assert len(regions) == 1
++
++    db.close()
+diff --git a/tests/test_problem_region_router.py b/tests/test_problem_region_router.py
+new file mode 100644
+index 0000000..fecd48e
+--- /dev/null
++++ b/tests/test_problem_region_router.py
+@@ -0,0 +1,72 @@
++import importlib
++
++from fastapi.testclient import TestClient
++
++
++def _fresh_client(tmp_path, monkeypatch):
++    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
++    monkeypatch.setenv("UPLOADS_ROOT", str(tmp_path / "uploads"))
++
++    import app.core.database as database_module
++
++    importlib.reload(database_module)
++
++    import app.main as main_module
++
++    importlib.reload(main_module)
++    return TestClient(main_module.app)
++
++
++def _create_problem(client: TestClient) -> int:
++    response = client.post("/problems/", json={"title": "테스트 문제"})
++    assert response.status_code == 200
++    return response.json()["id"]
++
++
++def test_create_and_get_regions(tmp_path, monkeypatch):
++    client = _fresh_client(tmp_path, monkeypatch)
++    problem_id = _create_problem(client)
++
++    create_resp = client.post(
++        f"/api/problems/{problem_id}/regions",
++        json={"problem_id": problem_id, "region_type": "figure", "label": "그림"},
++    )
++    assert create_resp.status_code == 200
++    region_id = create_resp.json()["id"]
++
++    list_resp = client.get(f"/api/problems/{problem_id}/regions")
++    assert list_resp.status_code == 200
++    assert len(list_resp.json()) == 1
++    assert list_resp.json()[0]["id"] == region_id
++
++
++def test_create_region_rejects_mismatched_problem_id(tmp_path, monkeypatch):
++    client = _fresh_client(tmp_path, monkeypatch)
++    problem_id = _create_problem(client)
++
++    resp = client.post(
++        f"/api/problems/{problem_id}/regions",
++        json={"problem_id": problem_id + 999, "region_type": "figure"},
++    )
++    assert resp.status_code == 400
++
++
++def test_update_and_delete_region(tmp_path, monkeypatch):
++    client = _fresh_client(tmp_path, monkeypatch)
++    problem_id = _create_problem(client)
++
++    create_resp = client.post(
++        f"/api/problems/{problem_id}/regions",
++        json={"problem_id": problem_id, "region_type": "figure", "label": "그림"},
++    )
++    region_id = create_resp.json()["id"]
++
++    patch_resp = client.patch(f"/api/problem-regions/{region_id}", json={"label": "수정됨"})
++    assert patch_resp.status_code == 200
++    assert patch_resp.json()["label"] == "수정됨"
++
++    delete_resp = client.delete(f"/api/problem-regions/{region_id}")
++    assert delete_resp.status_code == 200
++
++    missing_resp = client.patch(f"/api/problem-regions/{region_id}", json={"label": "다시 수정"})
++    assert missing_resp.status_code == 404

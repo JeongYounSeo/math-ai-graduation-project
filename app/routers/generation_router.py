@@ -8,6 +8,7 @@ from app.repositories.solution_module_repository import SolutionModuleRepository
 from app.repositories.type_combination_repository import TypeCombinationRepository
 from app.repositories.generated_problem_repository import GeneratedProblemRepository
 from app.utils.id_generator import generate_id
+from app.schemas.generation_schema import GeneratedProblemBase
 
 router = APIRouter()
 
@@ -41,7 +42,7 @@ async def generate_problem(
         "solution_text": result["mock_problem"]["solution_text"]
     }
     
-    await generated_repo.create(generated_problem_data)
+    await generated_repo.create(GeneratedProblemBase(**generated_problem_data))
     
     return GenerationResponse(
         generated_problem_id=generated_problem_id,

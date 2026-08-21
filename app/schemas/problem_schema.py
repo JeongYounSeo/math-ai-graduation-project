@@ -27,6 +27,8 @@ class ProblemBase(BaseModel):
     page_number: Optional[int] = None
     problem_number: Optional[int] = None
     elective_subject: Optional[str] = None
+    year: Optional[int] = None
+    theorem_bank_problem_id: Optional[str] = None
     problem_image_path: Optional[str] = None
     page_image_path: Optional[str] = None
     crop_box: Optional[Dict[str, Any]] = None
@@ -58,6 +60,8 @@ class ProblemUpdate(BaseModel):
     page_number: Optional[int] = None
     problem_number: Optional[int] = None
     elective_subject: Optional[str] = None
+    year: Optional[int] = None
+    theorem_bank_problem_id: Optional[str] = None
     problem_image_path: Optional[str] = None
     page_image_path: Optional[str] = None
     crop_box: Optional[Dict[str, Any]] = None
@@ -73,3 +77,11 @@ class Problem(ProblemBase):
 
     class Config:
         from_attributes = True
+
+
+class OCRRunResponse(BaseModel):
+    problem_id: int
+    body_text: Optional[str] = None
+    choices: List[str] = []
+    confidence: Optional[float] = None
+    provider: Optional[str] = None

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.repositories.problem_repository import ProblemRepository
@@ -9,12 +11,30 @@ router = APIRouter(prefix="/api/pdf-import", tags=["PDF Import"])
 
 
 @router.post("/upload")
-async def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_pdf(
+    file: UploadFile = File(...),
+    exam_name: str = Form(...),
+    year: int = Form(...),
+    exam_slug: str = Form(...),
+    month: Optional[int] = Form(None),
+    grade: Optional[str] = Form(None),
+    subject: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="PDF 파일만 업로드할 수 있습니다.")
 
     service = PDFImportService(db)
-    result = service.import_pdf(file, file.filename)
+    result = service.import_pdf(
+        file,
+        file.filename,
+        exam_name=exam_name,
+        year=year,
+        exam_slug=exam_slug,
+        month=month,
+        grade=grade,
+        subject=subject,
+    )
     return result
 
 

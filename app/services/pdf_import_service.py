@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from app.services.problem_candidate_merge_service import merge_classified_candid
 from app.services.problem_crop_service import crop_problem_candidates
 from app.services.crop_classifier_service import MockCropClassifier
 from app.services.problem_text_filter_service import ProblemTextFilter, extract_text_from_pdf_region
+from app.services.theorem_bank_id_service import build_theorem_bank_problem_id
 from app.utils.image_utils import draw_boxes_overlay, get_debug_output_path, save_debug_overlay
 
 
@@ -27,7 +28,18 @@ class PDFImportService:
         self.crop_classifier = MockCropClassifier()
         self.text_filter = ProblemTextFilter()
 
-    def import_pdf(self, uploaded_file, original_filename: str) -> dict:
+    def import_pdf(
+        self,
+        uploaded_file,
+        original_filename: str,
+        *,
+        exam_name: str,
+        year: int,
+        exam_slug: str,
+        month: Optional[int] = None,
+        grade: Optional[str] = None,
+        subject: Optional[str] = None,
+    ) -> dict:
         source_pdf_id = f"PDF_{uuid4().hex[:8].upper()}"
         stored_filename = f"{source_pdf_id}.pdf"
         pdf_path = get_pdf_storage_path(source_pdf_id)
@@ -42,6 +54,12 @@ class PDFImportService:
                 "file_path": str(pdf_path),
                 "total_pages": 0,
                 "status": "uploaded",
+                "exam_name": exam_name,
+                "year": year,
+                "exam_slug": exam_slug,
+                "month": month,
+                "grade": grade,
+                "subject": subject,
             }
         )
 
@@ -137,7 +155,12 @@ class PDFImportService:
                     status="unclassified",
                     original_candidate_boxes=merged_result.get("original_candidate_boxes"),
                     raw_ocr_text=filter_result.extracted_text or None,
+                    year=source_pdf.year,
                 )
+                theorem_bank_problem_id = build_theorem_bank_problem_id(problem, source_pdf)
+                if theorem_bank_problem_id:
+                    problem.theorem_bank_problem_id = theorem_bank_problem_id
+                    self.db.commit()
                 problem_candidates.append(problem)
 
             if debug_enabled:

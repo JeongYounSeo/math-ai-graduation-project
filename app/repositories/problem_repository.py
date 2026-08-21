@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.models.problem import Problem
 from app.schemas.problem_schema import ProblemCreate, ProblemUpdate
+from app.repositories.problem_region_repository import ProblemRegionRepository
 
 
 class ProblemRepository:
@@ -28,6 +29,7 @@ class ProblemRepository:
         status: str = "unclassified",
         original_candidate_boxes: Optional[list] = None,
         raw_ocr_text: Optional[str] = None,
+        year: Optional[int] = None,
     ) -> Problem:
         db_problem = Problem(
             title="",
@@ -36,6 +38,7 @@ class ProblemRepository:
             page_number=page_number,
             problem_number=problem_number,
             elective_subject=elective_subject,
+            year=year,
             problem_image_path=problem_image_path,
             page_image_path=page_image_path,
             crop_box=crop_box,
@@ -49,6 +52,10 @@ class ProblemRepository:
         self.db.add(db_problem)
         self.db.commit()
         self.db.refresh(db_problem)
+
+        # 문제가 생성될 때 full_problem region을 자동 생성한다 (§6).
+        ProblemRegionRepository(self.db).create_full_problem_region_from_problem(db_problem)
+
         return db_problem
 
     async def get_by_id(self, problem_id: int) -> Optional[Problem]:

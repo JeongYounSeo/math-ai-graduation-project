@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Problem Region Viewer</title>
+<style>
+  body { font-family: sans-serif; margin: 20px; color: #222; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 16px; margin-top: 28px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+  input[type="number"] { width: 100px; padding: 4px; }
+  button { padding: 6px 12px; cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: 0.6; }
+  #status { color: #b00; margin-left: 8px; }
+  .layout { display: flex; gap: 24px; align-items: flex-start; }
+  .layout img.page-preview { max-width: 420px; border: 1px solid #ccc; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 13px; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  td.thumb img { max-width: 80px; max-height: 80px; border: 1px solid #ccc; }
+  textarea { width: 100%; box-sizing: border-box; font-family: inherit; }
+  #bodyText { white-space: pre-wrap; background: #f9f9f9; border: 1px solid #ddd; padding: 8px; min-height: 60px; }
+  .muted { color: #888; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Problem Region Viewer</h1>
+
+<div class="toolbar">
+  <label for="problemId">Problem ID</label>
+  <input type="number" id="problemId" min="1" value="1">
+  <button id="loadBtn">불러오기</button>
+  <button id="ocrBtn" disabled>OCR 실행</button>
+  <button id="detectBtn" disabled>이미지/표 탐지</button>
+  <span id="status"></span>
+</div>
+
+<div class="layout">
+  <img id="pagePreview" class="page-preview" alt="" style="display:none;">
+  <div style="flex:1; min-width: 0;">
+    <h2>본문 (raw_ocr_text)</h2>
+    <div id="bodyText"></div>
+    <p class="muted" id="latexText"></p>
+  </div>
+</div>
+
+<h2>Regions</h2>
+<table id="regionsTable">
+  <thead>
+    <tr>
+      <th>ID</th><th>Type</th><th>Label</th><th>좌표</th><th>추출 텍스트</th><th>썸네일</th><th></th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<h2>선택지 (ProblemChoice)</h2>
+<table id="choicesTable">
+  <thead><tr><th>Label</th><th>Text</th><th>is_correct</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<h3>선택지 직접 입력 / 수정</h3>
+<p class="muted">한 줄에 보기 하나씩 입력 후 저장하면 기존 선택지를 모두 대체합니다. (정답은 여기서 설정하지 않습니다.)</p>
+<textarea id="choicesInput" rows="5" placeholder="13/2&#10;27/4&#10;7&#10;29/4&#10;15/2"></textarea>
+<br><br>
+<button id="saveChoicesBtn">선택지 저장</button>
+
+<script>
+const statusEl = document.getElementById('status');
+const problemIdInput = document.getElementById('problemId');
+const loadBtn = document.getElementById('loadBtn');
+const ocrBtn = document.getElementById('ocrBtn');
+const detectBtn = document.getElementById('detectBtn');
+const pagePreview = document.getElementById('pagePreview');
+const bodyTextEl = document.getElementById('bodyText');
+const latexTextEl = document.getElementById('latexText');
+const regionsTableBody = document.querySelector('#regionsTable tbody');
+const choicesTableBody = document.querySelector('#choicesTable tbody');
+const choicesInput = document.getElementById('choicesInput');
+const saveChoicesBtn = document.getElementById('saveChoicesBtn');
+
+function currentProblemId() {
+  return parseInt(problemIdInput.value, 10);
+}
+
+function setStatus(message, isError) {
+  statusEl.textContent = message || '';
+  statusEl.style.color = isError ? '#b00' : '#080';
+}
+
+async function loadProblem() {
+  const problemId = currentProblemId();
+  if (!problemId) return;
+  setStatus('불러오는 중...');
+  try {
+    const res = await fetch(`/api/problems/${problemId}`);
+    if (!res.ok) throw new Error(`문제를 불러오지 못했습니다 (HTTP ${res.status})`);
+    const problem = await res.json();
+
+    if (problem.problem_image_url) {
+      pagePreview.src = problem.problem_image_url;
+      pagePreview.style.display = '';
+    } else if (problem.page_image_url) {
+      pagePreview.src = problem.page_image_url;
+      pagePreview.style.display = '';
+    } else {
+      pagePreview.style.display = 'none';
+    }
+
+    bodyTextEl.textContent = problem.raw_ocr_text || '(본문 없음)';
+    latexTextEl.textContent = problem.latex_text ? `LaTeX: ${problem.latex_text}` : '';
+
+    ocrBtn.disabled = !problem.problem_image_path;
+    detectBtn.disabled = !problem.problem_image_path;
+
+    await Promise.all([loadRegions(problemId), loadChoices(problemId)]);
+    setStatus('불러오기 완료');
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+}
+
+async function loadRegions(problemId) {
+  const res = await fetch(`/api/problems/${problemId}/regions`);
+  if (!res.ok) throw new Error(`region 목록을 불러오지 못했습니다 (HTTP ${res.status})`);
+  const regions = await res.json();
+
+  regionsTableBody.innerHTML = '';
+  for (const region of regions) {
+    const tr = document.createElement('tr');
+
+    const coords = [region.x1, region.y1, region.x2, region.y2].every(v => v !== null && v !== undefined)
+      ? `(${region.x1.toFixed(0)}, ${region.y1.toFixed(0)}) - (${region.x2.toFixed(0)}, ${region.y2.toFixed(0)})`
+      : '-';
+
+    const thumbCell = document.createElement('td');
+    thumbCell.className = 'thumb';
+    if (region.cropped_image_path) {
+      const img = document.createElement('img');
+      img.src = toUploadsUrl(region.cropped_image_path);
+      img.alt = `region ${region.id} thumbnail`;
+      thumbCell.appendChild(img);
+    } else {
+      thumbCell.textContent = '(없음)';
+    }
+
+    const actionCell = document.createElement('td');
+    const cropBtn = document.createElement('button');
+    cropBtn.textContent = 'crop 재생성';
+    cropBtn.addEventListener('click', () => recropRegion(region.id));
+    actionCell.appendChild(cropBtn);
+
+    tr.innerHTML = `
+      <td>${region.id}</td>
+      <td>${region.region_type}</td>
+      <td>${region.label || ''}</td>
+      <td>${coords}</td>
+      <td>${(region.extracted_text || '').slice(0, 80)}</td>
+    `;
+    tr.appendChild(thumbCell);
+    tr.appendChild(actionCell);
+    regionsTableBody.appendChild(tr);
+  }
+}
+
+function toUploadsUrl(path) {
+  if (!path) return '';
+  if (path.startsWith('/uploads/')) return path;
+  const idx = path.replace(/\\/g, '/').indexOf('uploads/');
+  if (idx >= 0) return '/' + path.replace(/\\/g, '/').slice(idx);
+  return path;
+}
+
+async function recropRegion(regionId) {
+  setStatus('crop 재생성 중...');
+  try {
+    const res = await fetch(`/api/problem-regions/${regionId}/crop`, { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `crop에 실패했습니다 (HTTP ${res.status})`);
+    }
+    setStatus('crop 재생성 완료');
+    await loadRegions(currentProblemId());
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+}
+
+async function loadChoices(problemId) {
+  const res = await fetch(`/api/problems/${problemId}/choices`);
+  if (!res.ok) throw new Error(`선택지를 불러오지 못했습니다 (HTTP ${res.status})`);
+  const choices = await res.json();
+
+  choicesTableBody.innerHTML = '';
+  for (const choice of choices) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${choice.choice_label || ''}</td>
+      <td>${choice.text || ''}</td>
+      <td>${choice.is_correct === null || choice.is_correct === undefined ? 'null' : choice.is_correct}</td>
+    `;
+    choicesTableBody.appendChild(tr);
+  }
+
+  choicesInput.value = choices.map(c => c.text || '').join('\n');
+}
+
+async function runOcr() {
+  const problemId = currentProblemId();
+  if (!problemId) return;
+  ocrBtn.disabled = true;
+  const originalText = ocrBtn.textContent;
+  ocrBtn.textContent = 'OCR 실행 중...';
+  setStatus('OCR 실행 중...');
+  try {
+    const res = await fetch(`/problems/${problemId}/ocr`, { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `OCR 실행에 실패했습니다 (HTTP ${res.status})`);
+    }
+    setStatus('OCR 완료');
+    await loadProblem();
+  } catch (err) {
+    setStatus(err.message, true);
+  } finally {
+    ocrBtn.textContent = originalText;
+    ocrBtn.disabled = false;
+  }
+}
+
+async function runDetect() {
+  const problemId = currentProblemId();
+  if (!problemId) return;
+  detectBtn.disabled = true;
+  const originalText = detectBtn.textContent;
+  detectBtn.textContent = '탐지 중...';
+  setStatus('이미지/표 탐지 중...');
+  try {
+    const res = await fetch(`/api/problems/${problemId}/regions/detect`, { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `탐지에 실패했습니다 (HTTP ${res.status})`);
+    }
+    const regions = await res.json();
+    setStatus(`탐지 완료 (${regions.length}개 region 생성)`);
+    await loadRegions(problemId);
+  } catch (err) {
+    setStatus(err.message, true);
+  } finally {
+    detectBtn.textContent = originalText;
+    detectBtn.disabled = false;
+  }
+}
+
+async function saveChoices() {
+  const problemId = currentProblemId();
+  if (!problemId) return;
+  const choices = choicesInput.value.split('\n').map(s => s.trim()).filter(Boolean);
+  setStatus('선택지 저장 중...');
+  try {
+    const res = await fetch(`/api/problems/${problemId}/choices/replace`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ choices }),
+    });
+    if (!res.ok) throw new Error(`선택지 저장에 실패했습니다 (HTTP ${res.status})`);
+    setStatus('선택지 저장 완료');
+    await loadChoices(problemId);
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+}
+
+loadBtn.addEventListener('click', loadProblem);
+ocrBtn.addEventListener('click', runOcr);
+detectBtn.addEventListener('click', runDetect);
+saveChoicesBtn.addEventListener('click', saveChoices);
+</script>
+</body>
+</html>
