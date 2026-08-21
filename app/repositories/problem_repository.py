@@ -29,6 +29,7 @@ class ProblemRepository:
         status: str = "unclassified",
         original_candidate_boxes: Optional[list] = None,
         raw_ocr_text: Optional[str] = None,
+        year: Optional[int] = None,
     ) -> Problem:
         db_problem = Problem(
             title="",
@@ -37,6 +38,7 @@ class ProblemRepository:
             page_number=page_number,
             problem_number=problem_number,
             elective_subject=elective_subject,
+            year=year,
             problem_image_path=problem_image_path,
             page_image_path=page_image_path,
             crop_box=crop_box,

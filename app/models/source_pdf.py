@@ -13,6 +13,7 @@ class SourcePDF(Base):
     file_path = Column(String, nullable=False)
     total_pages = Column(Integer, default=0)
     exam_name = Column(String, nullable=True)
+    exam_slug = Column(String, nullable=True)
     year = Column(Integer, nullable=True)
     month = Column(Integer, nullable=True)
     grade = Column(String, nullable=True)

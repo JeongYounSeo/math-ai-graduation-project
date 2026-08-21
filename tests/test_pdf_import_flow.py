@@ -59,6 +59,7 @@ def test_pdf_upload_creates_source_pdf_and_problem_candidates(tmp_path, monkeypa
         response = client.post(
             "/api/pdf-import/upload",
             files={"file": ("sample.pdf", file_obj, "application/pdf")},
+            data={"exam_name": "테스트 모의고사", "year": "2025", "exam_slug": "test-mock"},
         )
 
     assert response.status_code == 200
@@ -125,6 +126,7 @@ def test_problem_number_detection_improves_crop_count(tmp_path, monkeypatch):
         response = client.post(
             "/api/pdf-import/upload",
             files={"file": ("sample.pdf", file_obj, "application/pdf")},
+            data={"exam_name": "테스트 모의고사", "year": "2025", "exam_slug": "test-mock"},
         )
 
     payload = response.json()
@@ -173,6 +175,7 @@ def test_problem_number_in_response(tmp_path, monkeypatch):
         response = client.post(
             "/api/pdf-import/upload",
             files={"file": ("sample.pdf", file_obj, "application/pdf")},
+            data={"exam_name": "테스트 모의고사", "year": "2025", "exam_slug": "test-mock"},
         )
 
     payload = response.json()

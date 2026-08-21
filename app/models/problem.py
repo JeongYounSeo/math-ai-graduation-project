@@ -59,6 +59,8 @@ class Problem(Base):
     page_number = Column(Integer, nullable=True)
     problem_number = Column(Integer, nullable=True)
     elective_subject = Column(String, nullable=True)
+    year = Column(Integer, nullable=True)
+    theorem_bank_problem_id = Column(String, nullable=True, index=True)
     problem_image_path = Column(String, nullable=True)
     page_image_path = Column(String, nullable=True)
     crop_box = Column(JSON, default={})

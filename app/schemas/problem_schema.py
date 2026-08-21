@@ -27,6 +27,8 @@ class ProblemBase(BaseModel):
     page_number: Optional[int] = None
     problem_number: Optional[int] = None
     elective_subject: Optional[str] = None
+    year: Optional[int] = None
+    theorem_bank_problem_id: Optional[str] = None
     problem_image_path: Optional[str] = None
     page_image_path: Optional[str] = None
     crop_box: Optional[Dict[str, Any]] = None
@@ -58,6 +60,8 @@ class ProblemUpdate(BaseModel):
     page_number: Optional[int] = None
     problem_number: Optional[int] = None
     elective_subject: Optional[str] = None
+    year: Optional[int] = None
+    theorem_bank_problem_id: Optional[str] = None
     problem_image_path: Optional[str] = None
     page_image_path: Optional[str] = None
     crop_box: Optional[Dict[str, Any]] = None
