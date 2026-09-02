@@ -1,10 +1,7 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
-
-# 베이스 클래스
-Base = declarative_base()
+from app.core.db_base import Base  # noqa: F401 (모델/테스트에서 재수출용으로 계속 사용)
 
 engine = None
 SessionLocal = None
@@ -38,5 +35,19 @@ def create_tables():
     """테이블 생성"""
     from app.models.problem import Problem
     from app.models.source_pdf import SourcePDF
+    from app.models.concept_module import ConceptModule
+    from app.models.solution_module import SolutionModule
+    from app.models.type_combination import TypeCombination
+    from app.models.generated_problem import GeneratedProblem
 
-    Base.metadata.create_all(bind=_init_engine(), tables=[Problem.__table__, SourcePDF.__table__])
+    Base.metadata.create_all(
+        bind=_init_engine(),
+        tables=[
+            Problem.__table__,
+            SourcePDF.__table__,
+            ConceptModule.__table__,
+            SolutionModule.__table__,
+            TypeCombination.__table__,
+            GeneratedProblem.__table__,
+        ],
+    )
