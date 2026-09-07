@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.generation_schema import GenerationRequest, GenerationResponse
+from app.schemas.generation_schema import GenerationRequest, GenerationResponse, GeneratedProblemBase
 from app.services.generation_service import GenerationService
 from app.services.prompt_builder_service import PromptBuilderService
 from app.repositories.solution_module_repository import SolutionModuleRepository
@@ -31,16 +31,16 @@ async def generate_problem(
     
     # 생성된 문제 저장
     generated_problem_id = generate_id()
-    generated_problem_data = {
-        "generated_problem_id": generated_problem_id,
-        "used_module_ids": request.selected_module_ids,
-        "used_combination_id": request.selected_combination_id,
-        "problem_text": result["mock_problem"]["problem_text"],
-        "problem_latex": result["mock_problem"]["problem_latex"],
-        "answer": result["mock_problem"]["answer"],
-        "solution_text": result["mock_problem"]["solution_text"]
-    }
-    
+    generated_problem_data = GeneratedProblemBase(
+        generated_problem_id=generated_problem_id,
+        used_module_ids=request.selected_module_ids,
+        used_combination_id=request.selected_combination_id,
+        problem_text=result["mock_problem"]["problem_text"],
+        problem_latex=result["mock_problem"]["problem_latex"],
+        answer=result["mock_problem"]["answer"],
+        solution_text=result["mock_problem"]["solution_text"],
+    )
+
     await generated_repo.create(generated_problem_data)
     
     return GenerationResponse(

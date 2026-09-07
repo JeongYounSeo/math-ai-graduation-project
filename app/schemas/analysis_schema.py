@@ -7,7 +7,7 @@ class AnalysisRequest(BaseModel):
 class AnalysisResponse(BaseModel):
     prompt_used: str
     mock_analysis: Dict[str, Any]
-    extracted_conditions: Dict[str, Any]
+    extracted_conditions: List[str]
     large_unit: str
     middle_unit: str
     detected_module_ids: List[str]

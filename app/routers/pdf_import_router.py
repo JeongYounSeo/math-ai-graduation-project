@@ -27,5 +27,5 @@ async def list_source_pdfs(db: Session = Depends(get_db)):
 @router.get("/source-pdfs/{source_pdf_id}/problems")
 async def get_source_pdf_problems(source_pdf_id: str, db: Session = Depends(get_db)):
     repo = ProblemRepository(db)
-    problems = repo.get_by_source_pdf_id(source_pdf_id)
+    problems = await repo.get_by_source_pdf_id(source_pdf_id)
     return problems

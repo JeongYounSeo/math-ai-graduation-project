@@ -11,7 +11,7 @@ class ProblemBase(BaseModel):
     raw_text: Optional[str] = None
     raw_ocr_text: Optional[str] = None
     latex_text: Optional[str] = None
-    extracted_conditions: Optional[Dict[str, Any]] = None
+    extracted_conditions: Optional[List[str]] = None
     large_unit: Optional[str] = None
     middle_unit: Optional[str] = None
     difficulty_level: Optional[str] = None
@@ -42,7 +42,7 @@ class ProblemUpdate(BaseModel):
     raw_text: Optional[str] = None
     raw_ocr_text: Optional[str] = None
     latex_text: Optional[str] = None
-    extracted_conditions: Optional[Dict[str, Any]] = None
+    extracted_conditions: Optional[List[str]] = None
     large_unit: Optional[str] = None
     middle_unit: Optional[str] = None
     difficulty_level: Optional[str] = None
