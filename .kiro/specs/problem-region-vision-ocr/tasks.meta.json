@@ -1,0 +1,607 @@
+{
+  "pbtResults": {
+    "6.2 이미지 경로 규칙 속성 기반 테스트 작성": {
+      "status": "passed",
+      "lastRunTimestamp": 1788799083579
+    },
+    "4.2 `PassageRepository.find_matching` 속성 기반 테스트 작성": {
+      "status": "passed",
+      "lastRunTimestamp": 1788799084786
+    },
+    "7.3 재시도 상한·백오프 속성 기반 테스트 작성 (SDK 목킹)": {
+      "status": "passed",
+      "lastRunTimestamp": 1788800314512
+    },
+    "8.7 텍스트 영역 처리·실패 격리 속성 기반 테스트 작성": {
+      "status": "passed",
+      "lastRunTimestamp": 1788800298657
+    },
+    "8.10 바운딩 박스 클램프 속성 기반 테스트 작성": {
+      "status": "passed",
+      "lastRunTimestamp": 1788800300054
+    },
+    "8.12 라벨 항목 개수·라벨 보존 속성 기반 테스트 작성": {
+      "status": "passed",
+      "lastRunTimestamp": 1788800301005
+    },
+    "8.13 라벨 항목 order_index 속성 기반 테스트 작성": {
+      "status": "passed",
+      "lastRunTimestamp": 1788800302407
+    },
+    "8.16 조립 캐시 연결 속성 기반 테스트 작성": {
+      "status": "passed",
+      "lastRunTimestamp": 1788801731100
+    },
+    "8.17 단일 호출 횟수 속성 기반 테스트 작성 (Vision 클라이언트 목킹)": {
+      "status": "passed",
+      "lastRunTimestamp": 1788800304791
+    }
+  },
+  "executionHistory": {
+    "1.1 `app/core/config.py`에 Claude 설정 프로퍼티 추가": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333417
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796346259
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796485830
+      }
+    ],
+    "1.2 `requirements.txt`에 `anthropic` 의존성 고정 버전으로 추가": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333483
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796347665
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796487207
+      }
+    ],
+    "1.3 `.env.example`에 Claude 자격증명 변수 문서화": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333543
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796348613
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796488609
+      }
+    ],
+    "2.1 `app/models/passage.py`에 `Passage` 모델 정의": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333598
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796497168
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796673237
+      }
+    ],
+    "2.2 `app/models/problem_region.py`에 `RegionType` enum과 `ProblemRegion` 모델 정의": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333641
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796498566
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796674694
+      }
+    ],
+    "2.3 `app/models/problem_region_item.py`에 `ProblemRegionItem` 모델 정의": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333684
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796499968
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796676066
+      }
+    ],
+    "2.4 `app/models/problem.py`에 `passage_id` 외래키 추가": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333744
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796701547
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796748387
+      }
+    ],
+    "3.1 `create_tables()`에 신규 모델 등록": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333793
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796754288
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796870865
+      }
+    ],
+    "3.2 `_init_engine()`에 SQLite `PRAGMA foreign_keys=ON` connect 이벤트 등록": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333837
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796871998
+      }
+    ],
+    "3.3 로컬 개발 DB 재생성 (파괴적, 로컬 전용)": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796333954
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796878869
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796932374
+      }
+    ],
+    "4.1 `app/repositories/passage_repository.py`에 `PassageRepository` 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334146
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796939550
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788797010266
+      }
+    ],
+    "4.3 `app/repositories/problem_region_repository.py`에 `ProblemRegionRepository` 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334207
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796940977
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788797009407
+      }
+    ],
+    "4.4 `app/repositories/problem_region_item_repository.py`에 `ProblemRegionItemRepository` 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334291
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796942129
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788797007962
+      }
+    ],
+    "5. Checkpoint - 모델·리포지토리·스키마 검증": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334354
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788797016935
+      }
+    ],
+    "6.1 `app/core/storage.py`에 영역/항목 이미지 경로 헬퍼 추가": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334416
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796350016
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796490007
+      }
+    ],
+    "7.1 `app/prompts/region_extraction_prompt.py`에 프롬프트 빌더 추가": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334478
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796351143
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796491144
+      }
+    ],
+    "7.2 `app/services/claude_vision_client.py`에 `ClaudeVisionClient`와 `VisionCallResult` 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334541
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796501087
+      },
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796677151
+      }
+    ],
+    "8.1 `ProblemRegionExtractionService` 골격과 이미지 검증·자격증명 폴백 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334602
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788800883531
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801019672
+      }
+    ],
+    "8.2 단일 Vision 호출 및 JSON 구조 검증·영역 타입/정렬 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334678
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801039470
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801268862
+      }
+    ],
+    "8.5 텍스트 영역 OCR/LaTeX 반영 및 confidence 저장 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334787
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801278439
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801484035
+      }
+    ],
+    "8.8 다이어그램 영역 크롭·바운딩 박스 클램핑 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334858
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801285465
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801485441
+      }
+    ],
+    "8.11 라벨 항목 구조화 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796334943
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801286416
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801486388
+      }
+    ],
+    "8.14 지문 재사용·생성 및 problems.passage_id 설정 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796335015
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801287784
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801487420
+      }
+    ],
+    "8.15 조립 캐시 갱신 및 단일 단위 영속화 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796335100
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801493067
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801775689
+      }
+    ],
+    "9. Checkpoint - 추출 서비스 검증": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796335162
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801930321
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788802057453
+      }
+    ],
+    "10.1 `app/schemas/`에 영역 응답 스키마 정의": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796335223
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788800887495
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801023707
+      }
+    ],
+    "10.2 `problem_router.py`에 `GET /{problem_id}/regions` 엔드포인트 추가": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796335284
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801040400
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801269955
+      }
+    ],
+    "11.1 `pdf_import_service.py`에 영역 추출 후처리 단계 추가": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796335349
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801787461
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801923343
+      }
+    ],
+    "13. Checkpoint - 전체 테스트 통과 확인": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796335404
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788802063764
+      }
+    ],
+    "14.1 `CLAUDE.md`에 구현 동작·스키마·한계 문서화": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796335479
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801931290
+      },
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788802058532
+      }
+    ],
+    "1. 설정과 의존성 준비": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796488672
+      }
+    ],
+    "6. 스토리지 헬퍼 확장": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796490067
+      }
+    ],
+    "7. Claude Vision 프롬프트 및 클라이언트 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796677223
+      }
+    ],
+    "2. 신규 영속 모델 정의": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796748466
+      }
+    ],
+    "3. 데이터베이스 등록 및 FK 무결성 설정": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788796932431
+      }
+    ],
+    "4. 신규 리포지토리 구현": [
+      {
+        "executionId": "48eab6a1-aed3-46d1-9c61-7d7b2efb395e",
+        "chatSessionId": "sess_77662bf1-2110-46e8-a202-7bcd06956f44",
+        "timestamp": 1788797010344
+      }
+    ],
+    "10. 조회 API 스키마 및 라우터": [
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801270017
+      }
+    ],
+    "8. 영역 추출 오케스트레이션 서비스 구현": [
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801775774
+      }
+    ],
+    "11. PDF 임포트 파이프라인 통합": [
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788801923445
+      }
+    ],
+    "14. 문서 업데이트": [
+      {
+        "executionId": "bca8ccbe-523b-40b7-9f13-21747e7b135a",
+        "chatSessionId": "sess_209be015-4012-4149-85e1-3175a670a80f",
+        "timestamp": 1788802058595
+      }
+    ]
+  }
+}

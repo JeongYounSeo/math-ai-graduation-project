@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Math Problem Engine · Admin</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">Σ</div>
+        <div class="brand-text">
+          <div class="brand-title">Math Problem Engine</div>
+          <div class="brand-sub">관리자 콘솔</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <div class="nav-group">
+          <div class="nav-group-title">개요</div>
+          <button class="nav-item" data-view="dashboard">
+            <span class="nav-icon">⌂</span><span>대시보드</span>
+          </button>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-title">문제 수집</div>
+          <button class="nav-item" data-view="pdf-import">
+            <span class="nav-icon">⇧</span><span>PDF 업로드</span>
+            <span class="badge badge-live">Live</span>
+          </button>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-title">문제 관리</div>
+          <button class="nav-item" data-view="problems">
+            <span class="nav-icon">▤</span><span>문제함</span>
+            <span class="badge badge-live">Live</span>
+          </button>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-title">지식 베이스</div>
+          <button class="nav-item" data-view="solution-modules">
+            <span class="nav-icon">◇</span><span>소유형 모듈</span>
+            <span class="badge badge-live">Live</span>
+          </button>
+          <button class="nav-item" data-view="concept-modules">
+            <span class="nav-icon">○</span><span>개념 모듈</span>
+            <span class="badge badge-live">Live</span>
+          </button>
+          <button class="nav-item" data-view="type-combinations">
+            <span class="nav-icon">⇄</span><span>유형 조합</span>
+            <span class="badge badge-live">Live</span>
+          </button>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-title">AI 파이프라인</div>
+          <button class="nav-item" data-view="analyze">
+            <span class="nav-icon">✎</span><span>문제 분석 테스트</span>
+            <span class="badge badge-mock">Mock</span>
+          </button>
+          <button class="nav-item" data-view="generate">
+            <span class="nav-icon">✦</span><span>문제 생성</span>
+            <span class="badge badge-mock">Mock</span>
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-foot">
+        <a href="/docs" target="_blank" rel="noopener">API 문서 (Swagger)</a>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <h1 id="view-title">대시보드</h1>
+        <div class="topbar-right">
+          <span id="conn-status" class="conn-status">연결 확인 중…</span>
+        </div>
+      </header>
+
+      <main class="content" id="content">
+        <!-- Dashboard -->
+        <section class="view" id="view-dashboard">
+          <p class="view-desc">현재 구현 상태를 한눈에 확인하세요. <span class="badge badge-live">Live</span> 는 실제로 동작하는 기능, <span class="badge badge-mock">Mock</span> 은 아직 AI 모델이 연동되지 않은 스텁(고정 예시 응답)입니다.</p>
+          <div class="stat-grid" id="stat-grid"></div>
+          <div class="dash-columns">
+            <div class="card">
+              <h3>실제로 동작하는 기능</h3>
+              <ul class="check-list">
+                <li>PDF 업로드 → 페이지 렌더링 → 문제 후보 자동 추출 (PyMuPDF + OpenCV)</li>
+                <li>문제함 조회·필터링·메타데이터 수정·제외 처리</li>
+                <li>소유형 / 개념 / 유형조합 CRUD (지식 베이스 직접 관리)</li>
+              </ul>
+            </div>
+            <div class="card card-mock">
+              <h3>아직 Mock 데이터인 기능</h3>
+              <ul class="check-list">
+                <li>문제 분석 (analyze) — 항상 같은 예시(코사인 법칙) 반환</li>
+                <li>문제 생성 (generate) — 실제 LLM 미호출, 고정 예시 반환</li>
+                <li>소유형 자동 생성(설명 → 모듈) — 프롬프트만 구성, 모델 미호출</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- PDF Import -->
+        <section class="view hidden" id="view-pdf-import">
+          <p class="view-desc">PDF를 올린 뒤 페이지별 crop 후보를 검토하세요. 채택한 후보만 최종 확정 시 문제함에 등록됩니다.</p>
+          <div class="card">
+            <h3>PDF 업로드 · crop 검토</h3>
+            <form id="upload-form" class="row-form">
+              <input type="file" id="pdf-file" accept="application/pdf" required />
+              <button type="submit" class="btn btn-primary">업로드하고 검토 시작</button>
+            </form>
+            <div id="upload-result" class="hint"></div>
+          </div>
+          <div class="card hidden" id="crop-review-panel">
+            <div class="crop-review-heading">
+              <div><h3 id="crop-review-title">Crop 검토</h3><p class="hint" id="crop-review-progress"></p></div>
+              <button class="btn btn-primary" id="crop-review-open">검토 화면 열기</button>
+            </div>
+            <div id="crop-review-pages"></div>
+          </div>
+          <div class="card">
+            <h3>업로드된 PDF 목록</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>ID</th><th>파일명</th><th>페이지</th><th>상태</th><th>업로드 시각</th><th></th></tr>
+                </thead>
+                <tbody id="source-pdf-tbody"><tr><td colspan="6" class="empty">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Problems -->
+        <section class="view hidden" id="view-problems">
+          <p class="view-desc">추출된 문제 후보를 검토하고 단원·난이도·태그를 분류합니다.</p>
+          <div class="card">
+            <div class="filter-row">
+              <label>상태
+                <select id="filter-status">
+                  <option value="unclassified">미분류 (unclassified)</option>
+                  <option value="classified">분류 완료 (classified)</option>
+                  <option value="excluded">제외 (excluded)</option>
+                  <option value="">전체</option>
+                </select>
+              </label>
+              <label>PDF
+                <select id="filter-source-pdf"><option value="">전체</option></select>
+              </label>
+              <label>선택과목
+                <input type="text" id="filter-subject" placeholder="예: 미적분" />
+              </label>
+              <button class="btn" id="filter-apply">조회</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>썸네일</th><th>#</th><th>PDF</th><th>페이지</th><th>단원</th><th>배점</th><th>상태</th><th></th></tr>
+                </thead>
+                <tbody id="problems-tbody"><tr><td colspan="8" class="empty">조회 버튼을 눌러주세요</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Solution Modules -->
+        <section class="view hidden" id="view-solution-modules">
+          <p class="view-desc">풀이 전략 단위인 소유형 모듈을 관리합니다. 자연어 설명으로 초안(draft)을 생성한 뒤 검증할 수 있습니다.</p>
+          <div class="card card-mock">
+            <h3>설명으로 초안 생성 <span class="badge badge-mock">Mock</span></h3>
+            <form id="sm-create-form" class="row-form">
+              <input type="text" id="sm-description" placeholder="예: 코사인 법칙을 사용해서 변의 길이를 구하는 유형" required />
+              <button type="submit" class="btn btn-primary">초안 생성</button>
+            </form>
+            <div id="sm-create-result" class="hint"></div>
+          </div>
+          <div class="card">
+            <h3>소유형 모듈 목록</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>module_id</th><th>이름</th><th>단원</th><th>상태</th><th></th></tr></thead>
+                <tbody id="sm-tbody"><tr><td colspan="5" class="empty">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Concept Modules -->
+        <section class="view hidden" id="view-concept-modules">
+          <p class="view-desc">공식·개념·관계식을 저장하는 개념 모듈입니다.</p>
+          <div class="card">
+            <h3>새 개념 모듈</h3>
+            <form id="cm-create-form" class="grid-form">
+              <input type="text" id="cm-concept-id" placeholder="concept_id (예: LAW_OF_COSINES)" required />
+              <input type="text" id="cm-name" placeholder="이름" required />
+              <input type="text" id="cm-large-unit" placeholder="큰 단원" />
+              <input type="text" id="cm-middle-unit" placeholder="세부 단원" />
+              <input type="text" id="cm-formula" placeholder="공식 LaTeX" />
+              <input type="text" id="cm-description" placeholder="설명" />
+              <button type="submit" class="btn btn-primary">추가</button>
+            </form>
+          </div>
+          <div class="card">
+            <h3>개념 모듈 목록</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>concept_id</th><th>이름</th><th>단원</th><th>공식</th></tr></thead>
+                <tbody id="cm-tbody"><tr><td colspan="4" class="empty">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Type Combinations -->
+        <section class="view hidden" id="view-type-combinations">
+          <p class="view-desc">여러 소유형이 연결되는 방식을 정의합니다.</p>
+          <div class="card">
+            <h3>새 유형 조합</h3>
+            <form id="tc-create-form" class="grid-form">
+              <input type="text" id="tc-combination-id" placeholder="combination_id" required />
+              <input type="text" id="tc-name" placeholder="이름" required />
+              <input type="text" id="tc-module-sequence" placeholder="소유형 순서 (쉼표로 구분)" />
+              <input type="text" id="tc-connection-rule" placeholder="연결 규칙" />
+              <input type="text" id="tc-generation-strategy" placeholder="생성 전략" />
+              <input type="text" id="tc-difficulty" placeholder="난이도" />
+              <button type="submit" class="btn btn-primary">추가</button>
+            </form>
+          </div>
+          <div class="card">
+            <h3>유형 조합 목록</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>combination_id</th><th>이름</th><th>소유형 순서</th><th>상태</th></tr></thead>
+                <tbody id="tc-tbody"><tr><td colspan="4" class="empty">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Analyze -->
+        <section class="view hidden" id="view-analyze">
+          <p class="view-desc"><span class="badge badge-mock">Mock</span> 프롬프트 구성 로직은 실제로 동작하지만, 아직 모델을 호출하지 않고 고정된 예시 결과를 반환합니다.</p>
+          <div class="card card-mock">
+            <h3>문제 텍스트 분석 테스트</h3>
+            <form id="analyze-form" class="row-form-col">
+              <textarea id="analyze-text" rows="4" placeholder="분석할 문제 텍스트를 입력하세요" required></textarea>
+              <button type="submit" class="btn btn-primary">분석 실행</button>
+            </form>
+            <pre id="analyze-result" class="result-box"></pre>
+          </div>
+        </section>
+
+        <!-- Generate -->
+        <section class="view hidden" id="view-generate">
+          <p class="view-desc"><span class="badge badge-mock">Mock</span> 선택한 소유형/유형조합을 바탕으로 프롬프트를 구성하지만, 실제 모델 호출 없이 고정된 예시 문제를 반환합니다.</p>
+          <div class="card card-mock">
+            <h3>문제 생성 테스트</h3>
+            <form id="generate-form" class="grid-form">
+              <select id="gen-modules" multiple size="5"></select>
+              <select id="gen-combination"><option value="">유형 조합 선택 안 함</option></select>
+              <input type="text" id="gen-difficulty" placeholder="난이도 (예: medium)" value="medium" />
+              <input type="text" id="gen-goal" placeholder="생성 목표 (예: 삼각형 변의 길이 구하기)" required />
+              <button type="submit" class="btn btn-primary">생성</button>
+            </form>
+            <pre id="generate-result" class="result-box"></pre>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Problem detail modal -->
+  <div class="modal-backdrop hidden" id="problem-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modal-title">문제 상세</h3>
+        <button class="btn-icon" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop crop-modal-backdrop hidden" id="crop-editor-modal" role="dialog" aria-modal="true" aria-labelledby="crop-editor-title">
+    <div class="modal crop-editor-modal">
+      <div class="modal-head"><h3 id="crop-editor-title">Crop 검토</h3><button class="btn-icon" id="crop-editor-close" aria-label="닫기">✕</button></div>
+      <div class="modal-body">
+        <div class="crop-workspace">
+          <div>
+            <p class="hint">박스를 선택해 끌거나 모서리를 조절하세요. 빈 곳을 드래그하면 새 영역을 그립니다.</p>
+            <div class="crop-editor-scroll" id="crop-editor-scroll"><div class="crop-editor-canvas" id="crop-editor-canvas"><img id="crop-editor-image" alt="crop 영역을 고를 원본 페이지"><div id="crop-editor-other-boxes"></div><div class="crop-editor-box" id="crop-editor-box"><span data-handle="nw"></span><span data-handle="n"></span><span data-handle="ne"></span><span data-handle="e"></span><span data-handle="se"></span><span data-handle="s"></span><span data-handle="sw"></span><span data-handle="w"></span></div></div></div>
+          </div>
+          <aside class="crop-workspace-side">
+            <label>페이지 <select id="crop-workspace-page"></select></label>
+            <p id="crop-workspace-status" class="hint"></p>
+            <div class="crop-workspace-preview" id="crop-workspace-preview"></div>
+            <p id="crop-editor-coordinates" class="hint"></p>
+            <p id="crop-workspace-reason" class="hint"></p>
+            <div class="crop-workspace-decisions"><button class="btn btn-danger" id="crop-editor-discard">버리기</button><button class="btn btn-primary" id="crop-editor-accept">채택하기</button></div>
+            <button class="btn" id="crop-finalize">검토 완료 · 문제함에 등록</button>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -59,8 +59,10 @@ def detect_problem_numbers_from_pdf_page(page: Any, page_number: int) -> list[De
         if y0 < 50:
             continue
 
-        if len(cleaned[:-1]) == 2 and problem_num not in {10, 20, 30}:
-            continue
+        # (제거 2026-09-25) 기존엔 두 자리 번호를 10/20/30만 허용하고 11~19,21~29 를
+        # 전부 버렸다. 수능 수학은 30번까지 있어 진짜 문제번호를 죽이는 버그였다.
+        # "숫자+마침표"(\d{1,2}\.) 형태만 통과시키므로 마침표 없는 페이지번호는
+        # 이미 위에서 걸러진다. problem_num > 30 필터가 상한을 담당.
 
         if problem_num >= 20 and (y0 > 700 or x0 > 500):
             continue

@@ -158,3 +158,59 @@ curl "http://localhost:8000/api/problems?status=unclassified"
 ## 결론
 
 PyMuPDF 텍스트 좌표 기반 문제 번호 감지를 성공적으로 구현했습니다. 휴리스틱 방식의 크루드한 2단 분할에서 벗어나 정확한 문제별 감지를 통해 더욱 정밀한 문제 영역 추출이 가능해졌습니다. 모든 테스트가 통과하고 기존 시스템과의 호환성도 완벽합니다.
+
+
+---
+
+# apply_ocr 연결 + Problem.choices 스키마 확장 (2026-09-17)
+
+## 개요
+
+그동안 만들어만 두고 아무 데서도 호출되지 않던 `ProblemOcrApplyService.apply_ocr_result`를
+실제 PDF import 파이프라인과 신규 API에 연결하고, 객관식 보기를 Problem 레코드에도 저장할 수
+있도록 스키마를 확장했다.
+
+## 구현 항목
+
+1. **full_problem region 자동 생성 연결**
+   - `pdf_import_service.py`의 훅 2(겹침 검증) 직후에 `apply_ocr_result` 호출을 추가.
+   - `crop_box`(=`{x,y,width,height}`)만 있으면 Vision 없이도 full_problem region이 항상 생성됨.
+   - try/except fail-open으로 감싸 실패해도 import 전체는 중단되지 않음.
+
+2. **choices 어댑터 (`_build_ocr_result_from_regions`)**
+   - CHOICE_BOX region의 items 텍스트를 `order_index` 순으로 뽑아 `choices` 리스트로 조립.
+   - Vision 미연동(스텁) 시 CHOICE_BOX가 없어 `choices`가 비고, 보기 저장은 skip → 회귀 0.
+
+3. **Problem.choices / answer_type 컬럼 추가 (스키마 변경)**
+   - `problems` 테이블에 `choices`(JSON, nullable), `answer_type`(String, nullable) 추가.
+   - 기존 DB는 `ALTER TABLE ADD COLUMN`으로 in-place 마이그레이션(백업: `*.db.bak_*`, 116행 보존).
+   - 정본은 `ProblemChoice` 테이블이고, 이 컬럼은 조회 편의용 비정규화 사본.
+     `ProblemChoiceRepository.replace_choices_for_problem`이 같은 트랜잭션에서 동시 갱신.
+   - 이전에 `problem_ocr_apply_service.py` docstring에 있던 "Problem 스키마 미변경" 결정을
+     뒤집은 것 → 해당 docstring도 "2026-09-17 스키마 갱신"으로 정정. `correct_answer`는 여전히 미저장.
+
+4. **`POST /{problem_id}/apply-ocr` 엔드포인트**
+   - `problem_router.py`에 추가. `/problems/...`와 `/api/problems/...` 양쪽에 노출.
+   - body(result dict)를 받아 apply 후 `{"choices_replaced": int, "full_problem_region_created": bool}` 반환.
+
+## 테스트
+
+- 신규: `tests/test_apply_ocr_integration.py` (6 케이스)
+  - 컬럼 존재 / choices 저장+Problem 동기화 / is_correct 전부 None / full_problem 1회만 생성 /
+    빈 choices skip / 어댑터 조립 / apply-ocr 엔드포인트 200·404
+- 기존 92개 통과 유지 예상 (총 98개)
+
+## 데이터 정합성 사전 검증 (실 DB read-only)
+
+- `crop_box`는 `{x,y,width,height}` 형태 → `xywh_to_corner`와 일치 (full_problem 생성 가능)
+- CHOICE_BOX items → `['1','2','3','4','5']` 조립 성공 (problem 89·90·91에 실데이터)
+- full_problem region 현재 0개 → 신규 생성 대상 확인
+
+## 후속작업 (2026-09-17 완료)
+
+- choices 어댑터를 신규 `choice_option` 유형까지 읽도록 확장 완료.
+  - 신규 방식: 각 보기가 별도 `choice_option` region, 텍스트는 region 의 latex_text/ocr_text 에 저장.
+    정렬은 order_index → get_box() top(y1) 순. 2개 이상일 때만 사용.
+  - 우선순위: 신규 `choice_option`(≥2개) → 없으면 기존 `CHOICE_BOX`+items 로 fallback.
+  - 구현: `PDFImportService._choices_from_choice_options` / `_choices_from_choice_box`.
+  - 테스트 추가: choice_option 순서 정렬 / y좌표 정렬 / choice_option 우선 / 1개면 CHOICE_BOX fallback (총 10개).

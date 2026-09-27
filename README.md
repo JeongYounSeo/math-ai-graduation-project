@@ -119,6 +119,27 @@ uvicorn app.main:app --reload
 
 ## API 목록
 
+### 저장된 PDF를 A안(번호 기반 crop)으로 재처리
+
+`POST /api/pdf-import/source-pdfs/{source_pdf_id}/reprocess`
+
+저장된 원본 PDF를 다시 읽어 새 `source_pdf_id` 아래에 페이지와 문제 이미지를 생성합니다. 원본 문제와 영역은 유지됩니다. 응답의 `reprocessed_from_source_pdf_id`가 원본, `source_pdf_id`가 새 결과입니다. `numbered_problem_count`로 번호가 저장된 문제 수를 확인하고, `GET /api/pdf-import/source-pdfs/{새 source_pdf_id}/problems`에서 결과를 검토할 수 있습니다.
+
+기본값 `crop_mode=a_only`는 번호 기반 crop을 다시 실행합니다. 새 문제에는 `full_problem` 영역만 자동 생성되며, 문제 내부의 Vision 영역 추출은 실행하지 않습니다.
+
+`crop_mode=auto`는 각 페이지 이미지와 A안의 절취선을 Gemini에 요청해 검토합니다. A안이 정확하면 유지하고, 누락 또는 잘못된 절취선이 있으면 Gemini가 페이지의 모든 문제 박스를 다시 제안합니다. B안 박스는 좌표, 크기, 겹침, 번호 중복을 검사한 뒤 저장합니다. Gemini 요청 실패, 불확실한 판단, 잘못된 박스가 나오면 기존 번호/이미지 방식으로 저장하되 해당 페이지와 새 PDF 상태를 `needs_review`로 표시합니다. 응답의 `page_reports`에 페이지별 방식, 검토 필요 여부, 이유, 사용 토큰, 실제 저장 수가 포함됩니다. 원본 PDF와 기존 문제 데이터는 유지됩니다. `auto`에는 `.env`의 `GEMINI_API_KEY`가 필요하며 페이지당 한 요청을 기준으로 호출 비용이 발생합니다(일시적 요청 실패 시 1회 재시도).
+
+```bash
+curl -X POST "http://localhost:8000/api/pdf-import/source-pdfs/PDF_B0A98A13/reprocess"
+
+# 페이지별 Gemini 검토 + 필요 시 B안 재탐지
+curl -X POST "http://localhost:8000/api/pdf-import/source-pdfs/PDF_B0A98A13/reprocess?crop_mode=auto"
+```
+
+여백 중심 후보 생성과 사용자 채택·버리기 UI의 구현 상태는 [crop 검토 UI 계획](docs/CROP_REVIEW_UI_PLAN.md), 바깥 crop과 문제 내부 region crop 설명은 [crop 파이프라인 보고서](docs/CROP_PIPELINE_REPORT.md)에 있습니다.
+
+새 검토 경로: 서버 실행 후 `/admin` → **PDF 업로드**에서 파일을 올리면 원본 페이지와 조절 가능한 crop 박스가 바로 열리고, 모든 페이지의 후보가 순서대로 생성됩니다. 기존 박스를 끌거나 모서리를 조절하고, 빈 곳을 드래그해 누락된 영역을 추가할 수 있습니다. 오른쪽의 **버리기**는 선택한 후보만 제외하고, **채택하기**는 선택 영역을 저장한 뒤 해당 페이지의 남은 후보를 한 번에 채택합니다. 별도 페이지 확인 버튼은 없습니다. 모든 페이지를 채택한 뒤 **검토 완료 · 문제함에 등록**을 누르면 채택한 crop만 문제함에 저장됩니다. Gemini는 `GEMINI_API_KEY`가 있을 때 페이지 전체와 여백 후보를 검토합니다. 기존 즉시 처리 API `POST /api/pdf-import/upload`는 계속 사용할 수 있습니다.
+
 ### Problem API
 - `POST /problems` - 문제 등록
 - `GET /problems` - 전체 문제 목록
@@ -335,7 +356,7 @@ PDF 업로드 시 다음 단계를 자동으로 수행합니다:
 
 - OCR 없음
 - 문제 번호 자동 인식 불완전
-- crop은 heuristic 기반
+- 번호를 읽지 못한 페이지의 기본 crop은 휴리스틱 기반 (`crop_mode=auto` 재처리에서 Gemini 검토 가능)
 - 자동 유형 분류 없음
 - LaTeX 인식 없음
 
@@ -356,3 +377,57 @@ PDF 업로드 시 다음 단계를 자동으로 수행합니다:
 - **테스트 우선**: 새로운 기능 추가 시 테스트 코드 작성
 
 이 시스템은 단순한 문제 생성기를 넘어, **수학 교육의 패러다임을 바꾸는 도구**가 될 것입니다.
+
+## 마이그레이션 노트: ProblemRegion 좌표 컬럼
+
+`ProblemRegion` 에 좌표 승격 컬럼(`x1, y1, x2, y2, page_width, page_height, parent_region_id`)이
+추가되었습니다. 이와 관련한 스키마 갱신 방법은 아래와 같습니다.
+
+- **`create_all()` 은 기존 테이블에 컬럼을 추가하지 않습니다.** SQLAlchemy 의
+  `Base.metadata.create_all()` 은 존재하지 않는 테이블만 새로 만들고, 이미 존재하는
+  테이블의 컬럼 변경/추가는 수행하지 않습니다. 따라서 기존 DB 파일을 그대로 두면
+  새 컬럼이 반영되지 않습니다.
+
+- **개발 환경(데이터 보존 불필요)**: `math_problem_engine.db` 파일을 삭제한 뒤 앱을
+  다시 실행(또는 테이블 재생성)하면 새 스키마로 재생성됩니다.
+
+  ```bash
+  # 예: 개발 DB 초기화
+  del math_problem_engine.db   # Windows
+  # rm math_problem_engine.db  # macOS/Linux
+  ```
+
+- **운영/보존 데이터**: 기존 데이터를 유지해야 하는 경우 아래 마이그레이션 스크립트를
+  실행하면 `ALTER TABLE` 로 7개 컬럼을 idempotent 하게 추가합니다(이미 있으면 건너뜀).
+
+  ```bash
+  python scripts/migrate_add_region_coords.py
+  ```
+
+  대상 DB 는 `DATABASE_URL` 환경변수(sqlite URL)를 우선 사용하며, 없으면 기본값
+  `sqlite:///./math_problem_engine.db` 를 사용합니다.
+
+## 겹침 검증 훅 플래그: ENABLE_REGION_OVERLAP_VALIDATION
+
+crop/region 파이프라인에 "영역 좌표 겹침 검증" 루프를 복원하는 훅이 추가되었습니다.
+이 훅은 **환경변수 `ENABLE_REGION_OVERLAP_VALIDATION` 로 gating** 되며 **기본값은 `False`**
+(비활성)입니다.
+
+- **off (기본)**: 기존 crop 파이프라인과 **100% 동일**하게 동작합니다. 검증기를
+  호출조차 하지 않으므로 기존 crop 결과에 회귀가 없습니다.
+- **on (`ENABLE_REGION_OVERLAP_VALIDATION=true`)**: 두 지점에서 겹침 검증기
+  (`region_overlap_validator.validate_and_resolve`)를 적용합니다.
+  1. **crop 후보 단계**(`mode="candidates"`): merge 직후 후보 crop_box 들을 corner 로
+     변환해 과검출·과병합 겹침을 보정(작은 쪽 reject)한 뒤 다시 xywh 로 되돌려 저장.
+  2. **region 추출 단계**(`mode="regions"`): 문제별 `ProblemRegion` 좌표를 조회해
+     겹침을 보정(shrink/clamp/부모-자식)한 뒤 `x1..y2` 컬럼과 `bounding_box` JSON 에
+     동시 기록.
+
+두 훅 모두 **fail-open** 입니다. 보정 중 예외가 발생하면 원본 좌표를 그대로 유지하고
+warning 로그만 남기며, PDF 임포트 파이프라인을 중단시키지 않습니다.
+
+```bash
+# 훅 활성화 예시 (Windows PowerShell)
+$env:ENABLE_REGION_OVERLAP_VALIDATION = "true"
+uvicorn app.main:app --reload
+```

@@ -41,6 +41,20 @@ class MockCropClassifier(CropClassifier):
         x = int(crop_box.get("x", 0))
         width = int(crop_box.get("width", 0))
 
+        # A numbered crop already represents a whole problem. Short questions
+        # must not be mistaken for answer-choice fragments and merged away.
+        if metadata.get("problem_number") is not None or metadata.get("crop_method") == "gemini":
+            return CropClassificationResult(
+                candidate_type="problem",
+                is_problem_related=True,
+                problem_number=metadata.get("problem_number"),
+                score=None,
+                should_save_as_problem=True,
+                should_merge_with_previous=False,
+                confidence=1.0,
+                reason="whole problem crop",
+            )
+
         if height < 80:
             return CropClassificationResult(
                 candidate_type="blank",
@@ -89,9 +103,9 @@ class MockCropClassifier(CropClassifier):
                 reason="likely answer choices",
             )
 
+        # (2026-09-25) 가짜 problem_number=1 휴리스틱 제거. 번호는 이제 crop 단계의
+        # 번호 기반 분할(_crop_by_problem_numbers)이 담당하고 merge 가 그 값을 우선한다.
         problem_number = None
-        if y < 250 and width > 200:
-            problem_number = 1
 
         return CropClassificationResult(
             candidate_type="problem",

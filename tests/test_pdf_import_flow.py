@@ -37,13 +37,88 @@ def create_test_pdf(path: Path) -> None:
     doc.close()
 
 
+def test_reprocess_source_pdf_preserves_original_and_skips_vision(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'reprocess.db'}")
+    monkeypatch.setenv("UPLOADS_ROOT", str(tmp_path / "uploads"))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("CLAUDE_API_KEY", raising=False)
+
+    import app.core.database as database_module
+    import app.core.storage as storage_module
+    import app.main as main_module
+    importlib.reload(database_module)
+    importlib.reload(storage_module)
+    importlib.reload(main_module)
+
+    client = TestClient(main_module.app)
+    pdf_path = tmp_path / "sample.pdf"
+    create_test_pdf(pdf_path)
+    with pdf_path.open("rb") as file_obj:
+        response = client.post(
+            "/api/pdf-import/upload",
+            files={"file": ("sample.pdf", file_obj, "application/pdf")},
+        )
+    assert response.status_code == 200
+    original_id = response.json()["source_pdf_id"]
+
+    from app.services.problem_region_extraction_service import ProblemRegionExtractionService
+
+    def vision_must_not_run(*_args, **_kwargs):
+        raise AssertionError("Vision region extraction must not run during A reprocess")
+
+    monkeypatch.setattr(ProblemRegionExtractionService, "extract_regions", vision_must_not_run)
+    response = client.post(f"/api/pdf-import/source-pdfs/{original_id}/reprocess")
+    assert response.status_code == 200, response.text
+    result = response.json()
+    new_id = result["source_pdf_id"]
+    assert new_id != original_id
+    assert result["reprocessed_from_source_pdf_id"] == original_id
+    assert result["numbered_problem_count"] >= 2
+
+    from app.models.problem_region import ProblemRegion, RegionType
+
+    db = database_module.SessionLocal()
+    try:
+        original_count = db.query(Problem).filter(Problem.source_pdf_id == original_id).count()
+        new_problems = db.query(Problem).filter(Problem.source_pdf_id == new_id).all()
+        assert original_count > 0
+        assert len(new_problems) == result["imported_problem_count"]
+        assert len({p.problem_number for p in new_problems if p.problem_number}) >= 2
+        assert all(
+            db.query(ProblemRegion).filter(
+                ProblemRegion.problem_id == p.id,
+                ProblemRegion.region_type == RegionType.FULL_PROBLEM.value,
+            ).count() == 1
+            for p in new_problems
+        )
+    finally:
+        db.close()
+
+    missing = client.post("/api/pdf-import/source-pdfs/PDF_DOESNOTEXIST/reprocess")
+    assert missing.status_code == 404
+
+
 def test_pdf_upload_creates_source_pdf_and_problem_candidates(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("UPLOADS_ROOT", str(tmp_path / "uploads"))
+    # Tests must not hit the network: clear Claude credentials so the
+    # region extraction service falls back to the stub (Req 6/15) instead
+    # of calling the real API. Without this, a .env key would be loaded
+    # and the import pipeline would mark problems "failed" on connection error.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("CLAUDE_API_KEY", raising=False)
 
     import app.core.database as database_module
     importlib.reload(database_module)
     from app.core.database import SessionLocal
+
+    # app.core.storage.DEFAULT_UPLOAD_ROOT는 모듈 import 시점에 UPLOADS_ROOT를
+    # 캡처하는 모듈 전역이다. 다른 테스트가 먼저 storage를 import 하면 이 값이
+    # 굳어져(예: 기본값 "uploads"), 여기서 monkeypatch로 UPLOADS_ROOT를 바꿔도
+    # 페이지/문제 이미지가 tmp_path가 아닌 옛 루트에 기록되어 경로 단언이 깨진다.
+    # storage를 reload 해 새 UPLOADS_ROOT로 DEFAULT_UPLOAD_ROOT를 재계산한다.
+    import app.core.storage as storage_module
+    importlib.reload(storage_module)
 
     import app.main as main_module
     importlib.reload(main_module)
@@ -103,10 +178,24 @@ def test_problem_number_detection_improves_crop_count(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("UPLOADS_ROOT", str(tmp_path / "uploads"))
+    # Tests must not hit the network: clear Claude credentials so the
+    # region extraction service falls back to the stub (Req 6/15) instead
+    # of calling the real API. Without this, a .env key would be loaded
+    # and the import pipeline would mark problems "failed" on connection error.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("CLAUDE_API_KEY", raising=False)
 
     import app.core.database as database_module
     importlib.reload(database_module)
     from app.core.database import SessionLocal
+
+    # app.core.storage.DEFAULT_UPLOAD_ROOT는 모듈 import 시점에 UPLOADS_ROOT를
+    # 캡처하는 모듈 전역이다. 다른 테스트가 먼저 storage를 import 하면 이 값이
+    # 굳어져(예: 기본값 "uploads"), 여기서 monkeypatch로 UPLOADS_ROOT를 바꿔도
+    # 페이지/문제 이미지가 tmp_path가 아닌 옛 루트에 기록되어 경로 단언이 깨진다.
+    # storage를 reload 해 새 UPLOADS_ROOT로 DEFAULT_UPLOAD_ROOT를 재계산한다.
+    import app.core.storage as storage_module
+    importlib.reload(storage_module)
 
     import app.main as main_module
     importlib.reload(main_module)
@@ -148,10 +237,24 @@ def test_problem_number_in_response(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("UPLOADS_ROOT", str(tmp_path / "uploads"))
+    # Tests must not hit the network: clear Claude credentials so the
+    # region extraction service falls back to the stub (Req 6/15) instead
+    # of calling the real API. Without this, a .env key would be loaded
+    # and the import pipeline would mark problems "failed" on connection error.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("CLAUDE_API_KEY", raising=False)
 
     import app.core.database as database_module
     importlib.reload(database_module)
     from app.core.database import SessionLocal
+
+    # app.core.storage.DEFAULT_UPLOAD_ROOT는 모듈 import 시점에 UPLOADS_ROOT를
+    # 캡처하는 모듈 전역이다. 다른 테스트가 먼저 storage를 import 하면 이 값이
+    # 굳어져(예: 기본값 "uploads"), 여기서 monkeypatch로 UPLOADS_ROOT를 바꿔도
+    # 페이지/문제 이미지가 tmp_path가 아닌 옛 루트에 기록되어 경로 단언이 깨진다.
+    # storage를 reload 해 새 UPLOADS_ROOT로 DEFAULT_UPLOAD_ROOT를 재계산한다.
+    import app.core.storage as storage_module
+    importlib.reload(storage_module)
 
     import app.main as main_module
     importlib.reload(main_module)

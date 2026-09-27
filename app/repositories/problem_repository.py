@@ -28,6 +28,7 @@ class ProblemRepository:
         status: str = "unclassified",
         original_candidate_boxes: Optional[list] = None,
         raw_ocr_text: Optional[str] = None,
+        commit: bool = True,
     ) -> Problem:
         db_problem = Problem(
             title="",
@@ -47,8 +48,11 @@ class ProblemRepository:
             status=status,
         )
         self.db.add(db_problem)
-        self.db.commit()
-        self.db.refresh(db_problem)
+        if commit:
+            self.db.commit()
+            self.db.refresh(db_problem)
+        else:
+            self.db.flush()
         return db_problem
 
     async def get_by_id(self, problem_id: int) -> Optional[Problem]:
@@ -70,6 +74,9 @@ class ProblemRepository:
 
     async def get_by_source_pdf_id(self, source_pdf_id: str) -> List[Problem]:
         return self.db.query(Problem).filter(Problem.source_pdf_id == source_pdf_id).order_by(Problem.id.asc()).all()
+
+    def count_by_source_pdf_id(self, source_pdf_id: str) -> int:
+        return self.db.query(Problem).filter(Problem.source_pdf_id == source_pdf_id).count()
 
     async def update(self, problem_id: int, problem_update: ProblemUpdate) -> Optional[Problem]:
         db_problem = self.db.query(Problem).filter(Problem.id == problem_id).first()

@@ -30,6 +30,10 @@ MIN_FINAL_INK_RATIO = 0.0015
 
 PADDING_X = 30
 PADDING_Y = 35
+# trim 시 한 행을 "내용 있는 행"으로 인정하는 최소 잉크 폭(px). 세로 구분선(폭 1~3px)
+# 이나 점 노이즈가 모든 행을 채워 trim 을 무력화하는 것을 막는다. 텍스트/수식/그림은
+# 가로로 이 값 이상 이어지므로 통과한다(2026-09-26 세로선 오검출 수정).
+MIN_INK_WIDTH = 12
 
 
 def _compute_thresholds(page_height: int) -> tuple[int, int]:
@@ -293,7 +297,12 @@ def trim_whitespace_from_crop(
         return None
 
     region = binary[search_y1:search_y2, x1:x2]
-    ink_rows = np.where(np.any(region > 0, axis=1))[0]
+    # 세로 구분선/노이즈 배제: 한 행에 잉크가 MIN_INK_WIDTH 이상일 때만 내용 행으로 침.
+    row_ink_counts = np.sum(region > 0, axis=1)
+    ink_rows = np.where(row_ink_counts >= MIN_INK_WIDTH)[0]
+    if ink_rows.size == 0:
+        # 폭 임계로 다 걸러졌으면(가는 선만 있는 경우) 원래 방식으로 폴백해 빈 판정.
+        ink_rows = np.where(np.any(region > 0, axis=1))[0]
     if ink_rows.size == 0:
         return None
 

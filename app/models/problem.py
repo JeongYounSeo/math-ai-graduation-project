@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, ForeignKey
 from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
@@ -14,6 +14,7 @@ class ProblemStatus(str, enum.Enum):
     UNCLASSIFIED = "unclassified"
     REVIEWED = "reviewed"
     EXCLUDED = "excluded"
+    FAILED = "failed"
 
 
 class Problem(Base):
@@ -34,11 +35,17 @@ class Problem(Base):
     score = Column(Integer)
     answer = Column(String)
     solution_text = Column(Text)
+    # 객관식 보기 텍스트를 Problem 레코드에 비정규화로 함께 저장(설계 §5-1).
+    # 정규화된 정본은 ProblemChoice 테이블이며, 이 컬럼은 조회 편의용 사본이다.
+    # apply_ocr_result 가 ProblemChoice replace 시 이 컬럼도 동시 갱신한다.
+    answer_type = Column(String, nullable=True)  # 예: "multiple_choice"
+    choices = Column(JSON, nullable=True)  # list[str] 보기 텍스트 (정답 정보 없음)
     detected_module_ids = Column(JSON)  # JSON 리스트
     small_type_ids = Column(JSON)
     tags = Column(JSON)
     memo = Column(Text)
     source_pdf_id = Column(String, nullable=True, index=True)
+    passage_id = Column(Integer, ForeignKey("passages.id"), nullable=True, index=True)
     page_number = Column(Integer, nullable=True)
     problem_number = Column(Integer, nullable=True)
     elective_subject = Column(String, nullable=True)
@@ -54,24 +61,22 @@ class Problem(Base):
     def problem_image_url(self) -> str | None:
         if not self.problem_image_path:
             return None
+        import app.core.storage as storage
         path = Path(self.problem_image_path)
-        if path.is_absolute():
-            try:
-                relative = path.relative_to(Path("uploads"))
-                return f"/uploads/{relative.as_posix()}"
-            except ValueError:
-                return f"/uploads/{path.name}"
-        return self.problem_image_path
+        try:
+            relative = path.resolve().relative_to(storage.DEFAULT_UPLOAD_ROOT.resolve())
+            return f"/uploads/{relative.as_posix()}"
+        except ValueError:
+            return None
 
     @property
     def page_image_url(self) -> str | None:
         if not self.page_image_path:
             return None
+        import app.core.storage as storage
         path = Path(self.page_image_path)
-        if path.is_absolute():
-            try:
-                relative = path.relative_to(Path("uploads"))
-                return f"/uploads/{relative.as_posix()}"
-            except ValueError:
-                return f"/uploads/{path.name}"
-        return self.page_image_path
+        try:
+            relative = path.resolve().relative_to(storage.DEFAULT_UPLOAD_ROOT.resolve())
+            return f"/uploads/{relative.as_posix()}"
+        except ValueError:
+            return None
